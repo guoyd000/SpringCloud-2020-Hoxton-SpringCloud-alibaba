@@ -42,13 +42,13 @@
 
 微服务技术栈： 多种技术的集合体。
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/73adfcb6-dd50-4125-a7ab-854296ffb35e.jpg)
+![img](img/73adfcb6-dd50-4125-a7ab-854296ffb35e.jpg)
 
 
 
 ## 2、SpringCloud入门
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/ca773d2e-8cd9-45d4-8eb1-15807d34e46e.jpg)
+![img](img/ca773d2e-8cd9-45d4-8eb1-15807d34e46e.jpg)
 
 为什么选择SpringCloud作为微服务架构？选型依据：
 
@@ -72,11 +72,11 @@ SpringCloud和SpringBoot是什么关系：
 
 互联网大厂微服务架构案例：
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/f4dbfa81-846c-415f-81c2-5e35261f6831.jpg)
+![img](img/f4dbfa81-846c-415f-81c2-5e35261f6831.jpg)
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/38e54e06-7751-4e79-9ab1-1277f4aa3e17.jpg)
+![img](img/38e54e06-7751-4e79-9ab1-1277f4aa3e17.jpg)
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/c29ecfb8-562c-415c-834f-6aa2ee88a087.jpg)
+![img](img/c29ecfb8-562c-415c-834f-6aa2ee88a087.jpg)
 
 
 
@@ -94,17 +94,17 @@ SpringCloud中文文档：https://www.bookstack.cn/read/spring-cloud-docs/docs-i
 
 版本依赖可以查看SpringCloud官网：https://spring.io/projects/spring-cloud#overview
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/456acc34-767e-489c-b5fe-5736bb220100.png)
+![img](img/456acc34-767e-489c-b5fe-5736bb220100.png)
 
 还可以通过：https://start.spring.io/actuator/info查看对应的版本依赖关系
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/b866e427-b9f7-4854-a26c-4085a9f7d786.png)
+![img](img/b866e427-b9f7-4854-a26c-4085a9f7d786.png)
 
 
 
 ## 2、当前项目选择的最终版本
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/f3cc3749-09d0-4abf-8387-644101d2e52b.jpg)
+![img](img/f3cc3749-09d0-4abf-8387-644101d2e52b.jpg)
 
 
 
@@ -114,11 +114,11 @@ SpringCloud中文文档：https://www.bookstack.cn/read/spring-cloud-docs/docs-i
 
 之前SpringCloud各个组件选型如下：
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/07771df4-f694-40e3-969d-c42ef6198e60.jpg)
+![img](img/07771df4-f694-40e3-969d-c42ef6198e60.jpg)
 
 在Netflix对各个组件采取停更不停用的措施后，SpringCloud家族出现了很多种可以替代的新组件，如下：
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/34e57b96-c46f-4502-8570-291186d9bb92.jpg)
+![img](img/34e57b96-c46f-4502-8570-291186d9bb92.jpg)
 
 
 
@@ -132,7 +132,7 @@ SpringCloud中文文档：https://www.bookstack.cn/read/spring-cloud-docs/docs-i
 
 #### ① 新建空的Maven项目即可，不勾选Create from archetype
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/44619280-ebbc-4bce-b8ac-94a0705b5327.png)                                              
+![img](img/44619280-ebbc-4bce-b8ac-94a0705b5327.png)                                              
 
 #### ② 聚合总父工程名字
 
@@ -145,23 +145,23 @@ SpringCloud中文文档：https://www.bookstack.cn/read/spring-cloud-docs/docs-i
 
 #### ③ Maven选版本3.5及以上
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/ec0022f2-eeac-40aa-8138-d286538d57f0.png)
+![img](img/ec0022f2-eeac-40aa-8138-d286538d57f0.png)
 
 #### ④ 字符编码设为UTF-8
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/870d56c6-3ed5-4f22-8eaa-c3d2e067946a.png)
+![img](img/870d56c6-3ed5-4f22-8eaa-c3d2e067946a.png)
 
 #### ⑤ 注解生效激活
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/08a59851-f12a-4cce-9980-391f97572976.png)
+![img](img/08a59851-f12a-4cce-9980-391f97572976.png)
 
 #### ⑥ java编译版本选8
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/f8813c44-8e0f-4120-bb39-830f6d60ae04.png)
+![img](img/f8813c44-8e0f-4120-bb39-830f6d60ae04.png)
 
 #### ⑦ File Type过滤*.idea和*.iml
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/5f5f9fee-11e1-42ea-b4e9-ca66c20d8fec.png)
+![img](img/5f5f9fee-11e1-42ea-b4e9-ca66c20d8fec.png)
 
 ### （2）父工程pom文件
 
@@ -304,7 +304,7 @@ dependencyManagement 元素中指定的版本号，例如在父项目里：
 
 ### （4）Maven跳过单元测试
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/40f8afe7-0790-4e42-acdf-1bb516d5d5b5.png)
+![img](img/40f8afe7-0790-4e42-acdf-1bb516d5d5b5.png)
 
 ### （5）父工程创建完成执行mvn:install将父工程发布到仓库方便子工程继承
 
