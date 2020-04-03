@@ -838,7 +838,626 @@ public class OrderController {
 
 # 五、Eureka服务注册与发现
 
+## 1、Eureka基础知识
+
+### （1） Eureka是什么
+
+Eureka是Netflix的一个子模块，也是核心模块之一。Eureka是一个基于REST的服务，用于定位服务，以实现云端中间层服务发现和故障转移。Netflix在设计Eureka时遵守的就是AP原则。服务注册与发现对于微服务架构来说是非常重要的，有了服务发现与注册，只需要使用服务的标识符，就可以访问到服务，而不需要修改服务调用的配置文件了。功能类似于dubbo的注册中心，比如Zookeeper。
+
+### （2） 什么是服务治理
+
+Spring Cloud 封装了 Netflix 公司开发的 Eureka 模块来实现服务治理。
+
+在传统的rpc远程调用框架中，管理每个服务与服务之间依赖关系比较复杂，管理比较复杂，所以需要使用服务治理，管理服务于服务之间依赖关系，可以实现服务调用、负载均衡、容错等，实现服务发现与注册。
+
+### （3） 什么是服务注册与发现
+
+Eureka 采用了 C-S 的设计架构。Eureka Server 作为服务注册功能的服务器，它是服务注册中心。而系统中的其他微服务，使用 Eureka 的客户端连接到 Eureka Server并维持心跳连接。这样系统的维护人员就可以通过 Eureka Server 来监控系统中各个微服务是否正常运行。SpringCloud 的一些其他模块（比如Zuul）就可以通过 Eureka Server 来发现系统中的其他微服务，并执行相关的逻辑。
+
+在服务注册与发现中，有一个注册中心。当服务器启动的时候，会把当前自己服务器的信息，比如服务地址、通讯地址等以别名方式注册到注册中心上。另一方（消费者|服务提供者），以该别名的方式去注册中心上获取到实际的服务通讯地址，然后再实现本地RPC远程调用框架。核心设计思想在于注册中心，因为使用注册中心管理每个服务与服务之间的一个依赖关系（服务治理概念）。在任何rpc远程框架中，都会有一个注册中心（存放服务地址相关信息（接口地址））。
+
+Eureka 和Dubbo的架构对比：
+
+![img](img/31f40d44-80d8-43a2-ae97-dade08bf1dce.jpg)![img](img/98639013-b79b-4811-a640-d48e4f6c8f2e.jpg)
+
+### （4） Eureka两组件
+
+Eureka Server：提供服务注册服务。各个微服务节点通过配置启动后，会在EurekaServer中进行注册，这样EurekaServer中的服务注册表中将会存储所有可用服务节点的信息，服务节点的信息可以在界面中直观的看到。
+
+Eureka Client：通过注册中心进行访问。是一个Java客户端，用于简化Eureka Server的交互，客户端同时也具备一个内置的、使用轮询(round-robin)负载算法的负载均衡器。在应用启动后，将会向Eureka Server发送心跳(默认周期为30秒)。如果Eureka Server在多个心跳周期内没有接收到某个节点的心跳，EurekaServer将会从服务注册表中把这个服务节点移除（默认90秒）。
+
+## 2、单机Eureka构建步骤
+
+### （1） 新建eurekaServer端cloud-eureka-server7001服务注册中心
+
+修改cloud-eureka-server7001的pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-eureka-server7001</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+新增application.yml文件
+
+```yaml
+server:
+  port: 7001
+eureka:
+  instance:
+    hostname: localhost #eureka服务端的实例名称
+  client:
+    #false表示不向注册中心注册自己。
+    register-with-eureka: false
+    #false表示自己端就是注册中心，我的职责就是维护服务实例，并不需要去检索服务
+    fetch-registry: false
+    service-url:
+      #设置与Eureka Server交互的地址查询服务和注册服务都需要依赖这个地址。
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+```
+
+新建主启动类EurekaMain7001
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.server.EnableEurekaServer;
+/**
+ * @author 王柳
+ * @date 2020/4/3 15:21
+ */
+@SpringBootApplication
+@EnableEurekaServer//EurekaServer服务器端启动类,接受其它微服务注册进来
+public class EurekaMain7001 {
+    public static void main(String[] args) {
+        SpringApplication.run(EurekaMain7001.class, args);
+    }
+}
+```
+
+测试
+
+![img](img/ac3dfc47-c90e-4cff-81ca-521a52b1aaad.jpg)
+
+### （2） eurekaClient端cloud-provider-payment8001注册进eurekaServer成为服务提供者
+
+修改cloud-provider-payment8001的pom.xml文件，添加如下配置：
+
+```xml
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+```
+
+修改application.yml文件，添加如下配置：
+
+```yaml
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:7001/eureka
+```
+
+修改主启动类PaymentMain8001，添加如下注解@EnableEurekaClient：
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:17
+ */
+@SpringBootApplication
+@EnableEurekaClient
+public class PaymentMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain8001.class, args);
+    }
+}
+```
+
+测试，依次启动7001和8001，http://localhost:7001/访问如下：
+
+![img](img/ecbac2ad-a448-40e2-a778-a79756f7b156.jpg)
+
+### （3） eurekaClient端cloud-consumer-order80注册进eurekaServer成为服务消费者
+
+修改cloud-consumer-order80的pom.xml文件，添加如下配置：
+
+```xml
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+```
+
+修改application.yml，添加如下配置：
+
+```yaml
+spring:
+  application:
+    name: cloud-order-service
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:7001/eureka
+```
+
+修改主启动类OrderMain80，添加如下注解@EnableEurekaClient：
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:03
+ */
+@SpringBootApplication
+@EnableEurekaClient
+public class OrderMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderMain80.class, args);
+    }
+}
+```
+
+测试，先启动7001，再依次启动8001和80，http://localhost:7001/访问如下：
+
+![img](img/18dc8d3e-4dfc-4df0-81fc-dfd1a355d191.jpg)
+
+## 3、集群Eureka构建步骤
+
+### （1） Eureka集群原理说明
+
+![img](img/ff11d837-b80b-496d-ba98-2385b7bbbc60.jpg)
+
+问题：微服务RPC远程服务调用最核心的是什么？
+
+高可用。试想你的注册中心只有一个Only one，它出故障了会导致整个服务环境不可用。
+
+解决办法：搭建Eureka注册中心集群，实现负载均衡 + 故障容错。
+
+### （2）**EurekaServer集群环境构建**
+
+参考cloud-eureka-server7001新建cloud-eureka-server7002。
+
+修改7002的pom.xml文件的依赖同7001一样。
+
+修改hosts映射配置：
+
+![img](img/f8d12f47-4f68-4d4c-823f-c83b4a87eecb.jpg)
+
+修改7001的application.yml配置如下：
+
+```yaml
+server:
+  port: 7001
+eureka:
+  instance:
+    hostname: eureka7001.com #eureka服务端的实例名称
+  client:
+    #false表示不向注册中心注册自己。
+    register-with-eureka: false
+    #false表示自己端就是注册中心，我的职责就是维护服务实例，并不需要去检索服务
+    fetch-registry: false
+    service-url:
+      #设置与Eureka Server交互的地址查询服务和注册服务都需要依赖这个地址。
+      defaultZone: http://eureka7002.com:7002/eureka/
+```
+
+修改7002的application.yml配置如下：
+
+```yaml
+server:
+  port: 7002
+eureka:
+  instance:
+    hostname: eureka7002.com #eureka服务端的实例名称
+  client:
+    #false表示不向注册中心注册自己。
+    register-with-eureka: false
+    #false表示自己端就是注册中心，我的职责就是维护服务实例，并不需要去检索服务
+    fetch-registry: false
+    service-url:
+      #设置与Eureka Server交互的地址查询服务和注册服务都需要依赖这个地址。
+      defaultZone: http://eureka7001.com:7001/eureka/
+```
+
+新建7002的主启动类EurekaMain7002：
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.server.EnableEurekaServer;
+/**
+ * @author 王柳
+ * @date 2020/4/3 15:21
+ */
+@SpringBootApplication
+@EnableEurekaServer//EurekaServer服务器端启动类,接受其它微服务注册进来
+public class EurekaMain7002 {
+    public static void main(String[] args) {
+        SpringApplication.run(EurekaMain7002.class, args);
+    }
+}
+```
+
+**（3）将支付服务8001发布到2台Eureka集群配置中**
+
+修改cloud-provider-payment8001的application.yml文件eureka配置如下：
+
+```yaml
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+```
+
+### （4）将订单服务80发布到2台Eureka集群配置中
+
+修改cloud-consumer-order80的application.yml文件eureka配置如下：
+
+```yaml
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+```
+
+### （5）支付服务提供者8001集群环境构建
+
+参考cloud-provider-payment8001新建cloud-provider-payment8002。
+
+修改8002的pom.xml文件的依赖同8001一样。
+
+新建8002的application.yml配置同8001。
+
+新建8002的主启动类PaymentMain8002同8001。
+
+将8001的业务类复制一份到8002中。
+
+修改8001/8002的Controller，添加如下serverPort，并在日志打印：
+
+```java
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:43
+ */
+@RestController
+@Slf4j
+public class PaymentController {
+    @Autowired
+    private PaymentService paymentService;
+    @Value("${server.port}")
+    private String serverPort;
+    @PostMapping("/payment/create")
+    public CommonResult create(@RequestBody Payment payment) {
+        int result = paymentService.create(payment);
+        log.info("*****插入结果****：" + result);
+        if (result > 0) {
+            return new CommonResult(200, "插入数据库成功，服务端口：" + serverPort, result);
+        } else {
+            return new CommonResult(444, "插入数据库失败，服务端口：" + serverPort);
+        }
+    }
+    @GetMapping("/payment/get/{id}")
+    public CommonResult getPaymentById(@PathVariable("id") Long id) {
+        Payment payment = paymentService.getPaymentById(id);
+        log.info("*****查询结果****：" + payment);
+        if (payment != null) {
+            return new CommonResult(200, "查询成功，服务端口：" + serverPort, payment);
+        } else {
+            return new CommonResult(444, "没有对应记录,查询ID：，服务端口：" + serverPort + id);
+        }
+    }
+}
+```
+
+### （6）负载均衡
+
+修改订单服务80访问支付服务的地址：
+
+```java
+@RestController
+@Slf4j
+public class OrderController {
+//    public static final String PAYMENT_URL = "http://localhost:8001";
+    public static final String PAYMENT_URL = "http://CLOUD-PAYMENT-SERVICE";
+...
+}
+```
+
+使用@LoadBalanced注解赋予RestTemplate负载均衡的能力
+
+```java
+@Configuration
+public class ApplicationContextConfig {
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+### （7）测试
+
+ 依次启动7001/7002、8001/8002、80，访问如下：
+
+![img](img/ffb72aae-0e1e-4efa-a0b3-5584c9f44eb5.png)
+
+![img](img/6b2ac20a-2f24-4841-a4b4-55e5ea47e4a1.png)
+
+​                          
+
+## 4、actuator微服务信息完善
+
+### （1）主机名称:服务名称修改
+
+当前问题：含有主机名称。
+
+![img](img/bce96b6a-53ec-4817-af55-bd76a3321fac.png)
+
+修改cloud-provider-payment8001的application.yml配置如下，cloud-provider-payment8002和cloud-consumer-order80相似的：
+
+```yaml
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+  instance:
+    instance-id: payment8001
+```
+
+（2）访问信息有IP信息提示
+
+![img](img/a5289d96-e0f0-4bd3-8e69-b24beff5bbfd.png)
+
+修改cloud-provider-payment8001的application.yml配置如下，cloud-provider-payment8002和cloud-consumer-order80相似的：
+
+```yaml
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+  instance:
+    instance-id: payment8001
+    prefer-ip-address: true     #访问路径可以显示IP地址
+```
+
+## 5、服务发现Discovery
+
+对于注册进eureka里面的微服务，可以通过服务发现来获得该服务的信息。
+
+修改cloud-provider-payment8001的Controller：
+
+```java
+import org.springframework.cloud.client.discovery.DiscoveryClient;
+    @Resource
+    private DiscoveryClient discoveryClient;
+    
+    @GetMapping(value = "/payment/discovery")
+    public Object discovery() {
+        List<String> list = discoveryClient.getServices();
+        log.info("************" + list);
+        List<ServiceInstance> serviceInstanceList = discoveryClient.getInstances("CLOUD-PAYMENT-SERVICE");
+        for (ServiceInstance serviceInstance : serviceInstanceList) {
+            log.info(serviceInstance.getServiceId() + "\t" + serviceInstance.getHost() + "\t" + serviceInstance.getPort() + "\t" + serviceInstance.getUri());
+        }
+        return this.discoveryClient;
+    }
+http://localhost:8001/payment/discovery
+```
+
+修改cloud-provider-payment8001的主启动类PaymentMain8001，添加注解@EnableDiscoveryClient：
+
+```java
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:17
+ */
+@SpringBootApplication
+@EnableEurekaClient
+@EnableDiscoveryClient
+public class PaymentMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain8001.class, args);
+    }
+}
+```
+
+![img](img/aad6f4e2-e946-486e-a698-3c11db2ab5ce.png)
+
+## 6、eureka自我保护
+
+### （1）故障现象
+
+![img](img/e8158e4d-4246-4105-89ff-5c4ed43d59b3.jpg)
+
+### （2）导致原因
+
+- 一句话：某时刻某一个微服务不可用了，eureka不会立刻清理，依旧会对该微服务的信息进行保存。
+- 属于CAP里面的AP分支。
+
+### （3）怎么禁止自我保护
+
+#### ① 为什么会产生Eureka自我保护机制
+
+![img](img/97a09ddf-d866-4faa-bfdb-7e2a4d267638.jpg)
+
+#### ② 什么是自我保护模式
+
+默认情况下，如果EurekaServer在一定时间内没有接收到某个微服务实例的心跳，EurekaServer将会注销该实例（默认90秒）。但是当网络分区故障发生时，微服务与EurekaServer之间无法正常通信，以上行为可能变得非常危险了——因为微服务本身其实是健康的，此时本不应该注销这个微服务。Eureka通过“自我保护模式”来解决这个问题——当EurekaServer节点在短时间内丢失过多客户端时（可能发生了网络分区故障），那么这个节点就会进入自我保护模式。一旦进入该模式，EurekaServer就会保护服务注册表中的信息，不再删除服务注册表中的数据（也就是不会注销任何微服务）。当网络故障恢复后，该Eureka Server节点会自动退出自我保护模式。
+
+在自我保护模式中，Eureka Server会保护服务注册表中的信息，不再注销任何服务实例。当它收到的心跳数重新恢复到阈值以上时，该Eureka Server节点就会自动退出自我保护模式。它的设计哲学就是宁可保留错误的服务注册信息，也不盲目注销任何可能健康的服务实例。
+
+一句话讲解：好死不如赖活着。
+
+综上，自我保护模式是一种应对网络异常的安全保护措施。它的架构哲学是宁可同时保留所有微服务（健康的微服务和不健康的微服务都会保留），也不盲目注销任何健康的微服务。使用自我保护模式，可以让Eureka集群更加的健壮、稳定。
+
+#### ③ 如何禁止自我保护
+
+Eureka服务端通过eureka.server.enable-self-preservation = false 禁用自我保护模式。
+
+服务端cloud-eureka-server7001修改application.yml设置如下配置：
+
+```yaml
+eureka:
+  server:
+    #关闭自我保护机制，保证不可用服务被及时剔除
+    enable-self-preservation: false
+    eviction-interval-timer-in-ms: 2000
+```
+
+客户端cloud-provider-payment8001修改application.yml设置如下配置：
+
+```yaml
+eureka:
+  instance:
+    #Eureka客户端向服务端发送心跳的时间间隔，单位为秒（默认是30秒）
+    lease-renewal-interval-in-seconds: 1
+    #Eureka服务端在收到最后一次心跳后等待时间上线，单位为秒（默认是90秒），超时将剔除服务
+    lease-expiration-duration-in-seconds: 2
+```
+
+## 7、Eureka开启Security登录校验
+
+Eureka服务端中导入相关依赖
+
+```xml
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-security</artifactId>
+        </dependency>
+```
+
+修改application.yml配置文件，客户端注册进服务中心，配置文件中eureka.service-url.defaultZone也必须添加用户名和密码：
+
+```yaml
+eureka:
+  client:
+    register-with-eureka: false     #false表示不向注册中心注册自己。
+    fetch-registry: false     #false表示自己端就是注册中心，我的职责就是维护服务实例，并不需要去检索服务
+    service-url:
+      #url中添加用户名和密码
+      defaultZone: http://admin:123456@eureka7001.com:7001/eureka/,http://admin:123456@eureka7002.com:7002/eureka/
+spring:
+  security:
+    user:
+      name: admin  #用户名
+      password: 123456 #密码
+```
+
+新版（Spring Cloud 2.0 以上）的security默认启用了csrf检验，要在eureka服务端配置security的csrf检验为false，否则eureka 客户端无法注册到eureka
+
+配置WebSecurityConfig
+
+```java
+/**
+ * 新版（Spring Cloud 2.0 以上）的security默认启用了csrf检验，要在eurekaServer端配置security的csrf检验为false
+ *
+ * @author 王柳
+ * @date 2019/11/7 11:16
+ */
+@EnableWebSecurity
+@Configuration
+public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.csrf().disable()//关闭csrf
+                .authorizeRequests().anyRequest().authenticated().and().httpBasic();
+    }
+}
+```
+
+![img](img/4f59fe97-aec4-45aa-9131-582b0bb0ea29.png)
+
 # 六、Zookeeper服务注册与发现
+
+![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/8bc851d4-3b6d-4fbe-a176-218f801b6848.jpg)
 
 # 七、Consul服务注册与发现
 
@@ -856,6 +1475,8 @@ public class OrderController {
 
 # 十四、SpringCloud Bus 消息总线
 
+ RabbitMQ/Kafka
+
 # 十五、SpringCloud Stream 消息驱动
 
 # 十六、SpringCloud Sleuth分布式请求链路跟踪
@@ -867,3 +1488,7 @@ public class OrderController {
 # 十九、SpringCloud Alibaba Sentinel实现熔断与限流
 
 # 二十、SpringCloud Alibaba Seata处理分布式事务
+
+# 二十一、TX-LCN分布式事务
+
+# 二十二、SpringBoot Admin监控中心
