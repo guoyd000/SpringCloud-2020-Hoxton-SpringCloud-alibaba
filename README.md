@@ -1457,9 +1457,362 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 
 # 六、Zookeeper服务注册与发现
 
-![img](file:///D:/Documents/My Knowledge/temp/7e1061d4-219f-4b8a-8f4a-1f567ffacdbb/128/index_files/8bc851d4-3b6d-4fbe-a176-218f801b6848.jpg)
+## 1、注册中心Zookeeper
+
+![img](img/b1d75d28-9ed1-4bce-9909-11c7be7f6a53.jpg)
+
+Zookeeper服务节点是临时性的。
+
+**作为服务注册中心，Eureka比Zookeeper好在哪里：**
+
+![img](img/b6f8be03-cd3b-4653-bf1c-aef682d878a0.jpg)
+
+著名的CAP理论指出，一个分布式系统不可能同时满足C（一致性）、A（可用性）和P（分区容错性）。由于分区容错性P是分布式系统中必须要保证的，因此我们只能在A和C之间进行权衡。
+
+Eureka遵守AP原则，Zookeeper遵守CP原则。
+
+Zookeeper：当向注册中心查询服务列表时，我们可以容忍注册中心返回的是几分钟以前的注册信息，但不能接受服务之间down掉不可用。也就是说，服务注册功能对可用性的要求要高于一致性。但是Zookeeper会出现这样一种情况，但master节点因为网络故障与其他节点失去联系时，剩余节点会重新进行leader选举。问题在于，选举leader的实际太长，30~120s，且选举期间整个Zookeeper集群都是不可用的，这就导致在选举期间注册服务瘫痪。在云部署的环境下，因网络问题使得Zookeeper集群失去master节点是较大概率会发生的事，虽然服务能够最终恢复，但是漫长的选举时间导致的注册长期不可用是不能容忍的。
+
+Eureka：Eureka看明白了这一点，因此在设计时就优先保证可用性。Eureka各个节点都是平等的，几个节点挂掉不会影响正常节点的工作，剩余的节点依然可以提供注册和查询服务。而Eureka的客户端在向某个Eureka注册时如果发现连接失败，则会自动切换至其他节点，只要有一台Eureka还在，就能保证注册服务可用（保证可用性），只不过查到的信息可能不是最新的（不保证强一致性）。除此之外，Eureka还有一种自我保护机制，如果在15分钟内超过85%的节点都没有正常的心跳，那么Eureka就任务客户端与注册中心出现了网络故障，此时会出现以下几种情况：
+
+（1）、Eureka不再从注册列表中移除因为长时间没收到心跳而应该过期的服务
+
+（2）、Eureka仍然能够接受新服务的注册和查询请求，但是不会被同步到其他节点上（即保证当前节点依然可用）
+
+（3）、当网络稳定时，当前实例新的注册信息会被同步到其他节点中
+
+因此，Eureka可用很好的应对因网络故障导致部分节点失去联系的情况，而不会像Zookeeper那样使整个注册服务瘫痪。
+
+Zookeeper安装请参考：[centos7上安装zookeeper](wiz://open_document?guid=009ed256-4aa1-48a4-a818-231d3094f4ce&kbguid=&private_kbguid=9e15e816-792d-4528-9d21-a849cc4117d5)
+
+## 2、服务提供者
+
+### （1）新建cloud-provider-payment8004
+
+### （2）修改cloud-provider-payment8004的pom.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-provider-payment8004</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--   SpringBoot整合Zookeeper客户端     -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-zookeeper-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建application.yml文件
+
+```yaml
+#8004表示注册到Zookeeper服务器的支付服务提供者端口号
+server:
+  port: 8004
+spring:
+  application:
+    #服务别名---注册Zookeeper到注册中心名称
+    name: cloud-payment-service
+  cloud:
+    zookeeper:
+      # Zookeeper安装所在服务器地址和Zookeeper配置的端口
+      connect-string: 192.168.253.129:2181
+```
+
+### （4）新建主启动类PaymentMain8004
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:17
+ */
+@SpringBootApplication
+@EnableDiscoveryClient //  该注解用于向使用consul或者Zookeeper作为注册中心时注册服务
+public class PaymentMain8004 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain8004.class, args);
+    }
+}
+```
+
+### （5）新建Controller类
+
+```java
+package com.atguigu.springcloud.controller;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import java.util.UUID;
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:43
+ */
+@RestController
+@Slf4j
+public class PaymentController {
+    @Value("${server.port}")
+    private String serverPort;
+    @GetMapping("/payment/zk")
+    public String paymentZk() {
+        return "springcloud with zookeeper: " + serverPort + "\t" + UUID.randomUUID().toString();
+    }
+}
+```
+
+### （6）启动8004注册进zookeeper
+
+启动报如下错误，提示是Zookeeper版本jar包冲突，需要修改pom.xml文件排除依赖：
+
+![img](img/11b0bb22-ed1b-4e6c-aded-5912f9b4a8f2.png)
+
+ 
+
+```xml
+        <!--   SpringBoot整合Zookeeper客户端     -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-zookeeper-discovery</artifactId>
+            <!--     先排除自带的Zookeeper3.5.3       -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.zookeeper</groupId>
+                    <artifactId>zookeeper</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!--    添加我们安装的Zookeeper对应的版本    -->
+        <dependency>
+            <groupId>org.apache.zookeeper</groupId>
+            <artifactId>zookeeper</artifactId>
+            <version>3.4.14</version>
+             <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-log4j12</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+```
+
+![img](img/a86d1447-2e2a-4c60-a0ca-db83817f00ed.png)
+
+![img](img/609366ca-6890-4933-80a7-c429b9cf1912.png)
+
+## 3、服务消费者
+
+### （1）新建cloud-consumerzk-order80
+
+### （2）修改cloud-consumerzk-order80的pom.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-consumerzk-order80</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!--   SpringBoot整合Zookeeper客户端     -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-zookeeper-discovery</artifactId>
+            <!--     先排除自带的Zookeeper3.5.3       -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.zookeeper</groupId>
+                    <artifactId>zookeeper</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!--    添加我们安装的Zookeeper对应的版本    -->
+        <dependency>
+            <groupId>org.apache.zookeeper</groupId>
+            <artifactId>zookeeper</artifactId>
+            <version>3.4.14</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.slf4j</groupId>
+                    <artifactId>slf4j-log4j12</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建application.yml文件
+
+```yaml
+#8004表示注册到Zookeeper服务器的支付服务提供者端口号
+server:
+  port: 80
+spring:
+  application:
+    #服务别名---注册Zookeeper到注册中心名称
+    name: cloud-order-service
+  cloud:
+    zookeeper:
+      # Zookeeper安装所在服务器地址和Zookeeper配置的端口
+      connect-string: 192.168.253.129:2181
+```
+
+### （4）新建主启动类
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:17
+ */
+@SpringBootApplication
+@EnableDiscoveryClient //  该注解用于向使用consul或者Zookeeper作为注册中心时注册服务
+public class OrderZkMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderZkMain80.class, args);
+    }
+}
+```
+
+### （5）新建业务类
+
+```java
+package com.atguigu.springcloud.config;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:11
+ */
+@Configuration
+public class ApplicationContextConfig {
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+ 
+
+```java
+package com.atguigu.springcloud.controller;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:12
+ */
+@RestController
+@Slf4j
+public class OrderController {
+    //    public static final String PAYMENT_URL = "http://localhost:8001";
+    public static final String PAYMENT_URL = "http://cloud-payment-service";
+    @Autowired
+    private RestTemplate restTemplate;
+    @GetMapping("/consumer/payment/zk")
+    public String paymentInfo() {
+        return restTemplate.getForObject(PAYMENT_URL + "/payment/zk", String.class);
+    }
+}
+```
+
+### （6）启动80注册进Zookeeper
+
+![img](img/4e865708-ec55-4940-8053-18f0e2909112.png)
+
+![img](img/5ea7d092-e3ea-4ceb-b2d5-a8c4073765bc.png)
 
 # 七、Consul服务注册与发现
+
+
 
 # 八、Ribbon负载均衡服务调用
 
