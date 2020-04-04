@@ -2150,7 +2150,317 @@ public class OrderController {
 
 # 八、Ribbon负载均衡服务调用
 
+## 1、概述
+
+### （1）是什么
+
+Spring Cloud Ribbon是基于Netflix Ribbon实现的一套客户端 负载均衡的工具。
+
+简单的说，Ribbon是Netflix发布的开源项目，主要功能是提供客户端的软件负载均衡算法，将Netflix的中间层服务连接在一起。Ribbon客户端组件提供一系列完善的配置项如连接超时，重试等。简单的说，就是在配置文件中列出Load Balancer（简称LB）后面所有的机器，Ribbon会自动的帮助你基于某种规则（如简单轮询，随机连接等）去连接这些机器。我们也很容易使用Ribbon实现自定义的负载均衡算法。
+
+### （2）官网资料
+
+官网资料：https://github.com/Netflix/ribbon/wiki/Getting-Started
+
+Ribbon目前也进入维护模式，未来替换方案如下：
+
+![img](img/63dcab72-bcdb-4eec-b1ec-eb3ba6410f2a.jpg)
+
+### （3）能干吗
+
+LB（负载均衡）：LB，即负载均衡(Load Balance)，在微服务或分布式集群中经常用的一种应用。负载均衡简单的说就是将用户的请求平摊的分配到多个服务上，从而达到系统的HA（高可用）。常见的负载均衡有软件Nginx，LVS，硬件 F5等。相应的在中间件，例如：dubbo和SpringCloud中均给我们提供了负载均衡，SpringCloud的负载均衡算法可以自定义。 
+
+![img](img/254157b5-26f5-4202-9d50-49351726fa6f.jpg)
+
+集中式LB：即在服务的消费方和提供方之间使用独立的LB设施(可以是硬件，如F5, 也可以是软件，如nginx), 由该设施负责把访问请求通过某种策略转发至服务的提供方。
+
+进程内LB：将LB逻辑集成到消费方，消费方从服务注册中心获知有哪些地址可用，然后自己再从这些地址中选择出一个合适的服务器。Ribbon就属于进程内LB，它只是一个类库，集成于消费方进程，消费方通过它来获取到服务提供方的地址。
+
+## 2、Ribbon负载均衡演示
+
+### （1）架构说明
+
+![img](img/bf23f998-90ae-49ac-9c2a-e8e990edc63a.png)
+
+![img](img/4dbcc332-36d5-4a9a-bdd2-b33a9a830ad5.jpg)
+
+Ribbon在工作时分成两步：
+
+- 第一步先选择 EurekaServer ,它优先选择在同一个区域内负载较少的server；
+- 第二步再根据用户指定的策略，在从server取到的服务注册列表中选择一个地址。
+
+其中Ribbon提供了多种策略：比如轮询、随机和根据响应时间加权。
+
+### （2）POM
+
+![img](img/b2f96b45-5a6e-40f2-b98e-e586b35ec8f7.jpg)
+
+### （3）RestTemplate的使用
+
+#### ① 官网
+
+![img](img/b447a110-addf-48c5-b6fc-78b6881b09f1.jpg)
+
+#### ② getForObject方法/getForEntity方法
+
+![img](img/59e47db8-6e85-412b-8249-b0769cdfc640.jpg)
+
+#### ③ postForObject/postForEntity
+
+#### ④ Get请求方法
+
+#### ⑤ Post请求方法
+
+## 3、Ribbon核心组件IRule
+
+### （1）IRule
+
+#### ① 定义
+
+根据特定算法中从服务列表中选取一个要访问的服务。
+
+![img](img/58f94a41-b954-4071-9ddd-9a329206f631.jpg)
+
+#### ② 7种IRule规则
+
+- RoundRobinRule：轮询；
+- RandomRule：随机；
+- AvailabilityFilteringRule：会先过滤掉由于多次访问故障而处于断路器跳闸状态的服务，还有并发的连接数量超过阀值的服务，然后对剩余的服务列表按照轮询策略进行访问；
+- WeightedResponseTimeRule：根据平均响应时间计算所有服务的权重，响应时间越快服务权重越大被选中的概率越高。刚启动时如果统计信息不足，则使用RoundRobinRule策略，等统计信息足够，会切换到WeightedResponseTimeRule；
+- RetryRule：先按照RoundRobinRule的策略获取服务，如果获取服务失败则在指定时间内会进行重试，获取可用的服务；
+- BestAvailableRule：会先过滤掉由于多次访问故障而处于断路器跳闸状态的服务，然后选择一个并发量最小的服务；
+- ZoneAvoidanceRule：默认规则，复合判断server所在区域的性能和server的可用性选择服务器。
+
+### （2）如何替换
+
+#### ① 修改cloud-consumer-order80
+
+#### ② 注意配置细节
+
+官方文档明确给出了警告：这个自定义配置类（MySelfRule）不能放在@ComponentScan所扫描的当前包下以及子包下，否则我们自定义的这个配置类就会被所有的Ribbon客户端所共享，也就是说我们达不到特殊化定制的目的了。
+
+#### ③ 新建package
+
+com.atguigu.myrule
+
+#### ④ 新建MySelfRule规则类
+
+```java
+package com.atguigu.myrule;
+import com.netflix.loadbalancer.IRule;
+import com.netflix.loadbalancer.RandomRule;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+/**
+ * @author 王柳
+ * @date 2020/4/4 16:49
+ */
+@Configuration
+public class MySelfRule {
+    @Bean
+    public IRule myRule() {
+        // 达到的目的，用我们重新选择的随机算法替代默认的轮询
+        return new RandomRule();
+    }
+}
+```
+
+#### ⑤ 主启动类添加@RibbonClient
+
+```java
+package com.atguigu.springcloud;
+import com.atguigu.myrule.MySelfRule;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+import org.springframework.cloud.netflix.ribbon.RibbonClient;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:03
+ */
+@SpringBootApplication
+@EnableEurekaClient
+@RibbonClient(name = "CLOUD-PAYMENT-SERVICE",configuration = MySelfRule.class)
+public class OrderMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderMain80.class, args);
+    }
+}
+```
+
+#### ⑥ 测试，多次刷新
+
+![img](img/1cf47007-fa18-4d79-8fcb-17fa37d316a7.jpg)
+
+## 4、Ribbon负载均衡算法
+
+### （1）原理
+
+![img](img/7a939bfe-c4d7-41c9-85e2-3273cbdb3750.jpg)
+
+**（2）源码**
+
+https://github.com/Netflix/ribbon/blob/master/ribbon-loadbalancer/src/main/java/com/netflix/loadbalancer/RandomRule.java
+
+### （3）自定义负载均衡算法
+
+#### ① 7001、7002集群启动
+
+#### ② 8001、8002微服务改造
+
+PaymentController类添加如下：
+
+```java
+    @GetMapping("/payment/lb")
+    public String getPaymentLb() {
+        return serverPort;
+    }
+```
+
+#### ③ 80微服务改造
+
+##### ApplicationContextConfig去掉@LoadBalanced注解
+
+```java
+package com.atguigu.springcloud.config;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:11
+ */
+@Configuration
+public class ApplicationContextConfig {
+    @Bean
+//    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+##### LoadBalancer接口
+
+```java
+package com.atguigu.springcloud.lb;
+import org.springframework.cloud.client.ServiceInstance;
+import java.util.List;
+/**
+ * @author 王柳
+ * @date 2020/4/4 17:26
+ */
+public interface LoadBalancer {
+    ServiceInstance instances(List<ServiceInstance> serviceInstances);
+}
+```
+
+##### MyLB实现类
+
+```java
+package com.atguigu.springcloud.lb;
+import org.springframework.cloud.client.ServiceInstance;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+/**
+ * @author 王柳
+ * @date 2020/4/4 17:27
+ */
+@Component
+public class MyLB implements LoadBalancer {
+    private AtomicInteger atomicInteger = new AtomicInteger(0);
+    public final int getAndIncrement() {
+        int current;
+        int next;
+        do {
+            current = this.atomicInteger.get();
+            next = current >= 2147483647 ? 0 : current + 1;
+        } while (!this.atomicInteger.compareAndSet(current, next));
+        System.out.println("****next: " + next);
+        return next;
+    }
+    @Override
+    public ServiceInstance instances(List<ServiceInstance> serviceInstances) {
+        int index = getAndIncrement() % serviceInstances.size();
+        return serviceInstances.get(index);
+    }
+}
+```
+
+##### OrderController
+
+```java
+package com.atguigu.springcloud.controller;
+import com.atguigu.springcloud.entities.CommonResult;
+import com.atguigu.springcloud.entities.Payment;
+import com.atguigu.springcloud.lb.LoadBalancer;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+import javax.annotation.Resource;
+import java.net.URI;
+import java.util.List;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:12
+ */
+@RestController
+@Slf4j
+public class OrderController {
+    //    public static final String PAYMENT_URL = "http://localhost:8001";
+    public static final String PAYMENT_URL = "http://CLOUD-PAYMENT-SERVICE";
+    @Autowired
+    private RestTemplate restTemplate;
+    @Resource
+    private LoadBalancer loadBalancer;
+    @Resource
+    private DiscoveryClient discoveryClient;
+    @GetMapping("/consumer/payment/create")
+    public CommonResult<Payment> create(Payment payment) {
+        return restTemplate.postForObject(PAYMENT_URL + "/payment/create", payment, CommonResult.class);
+    }
+    @GetMapping("/consumer/payment/get/{id}")
+    public CommonResult<Payment> getPayment(@PathVariable("id") Long id) {
+        return restTemplate.getForObject(PAYMENT_URL + "/payment/get/" + id, CommonResult.class);
+    }
+    @GetMapping("/consumer/payment/getForEntity/{id}")
+    public CommonResult<Payment> getForEntity(@PathVariable("id") Long id) {
+        ResponseEntity<CommonResult> entity = restTemplate.getForEntity(PAYMENT_URL + "/payment/get/" + id, CommonResult.class);
+        if (entity.getStatusCode().is2xxSuccessful()) {
+            return entity.getBody();
+        } else {
+            return new CommonResult(444, "操作失败");
+        }
+    }
+    @GetMapping("/consumer/payment/lb")
+    public String getPaymentLb() {
+        List<ServiceInstance> instances = discoveryClient.getInstances("CLOUD_PAYMENT_SERVICE");
+        if (instances == null || instances.size() <= 0) {
+            return null;
+        }
+        ServiceInstance serviceInstance = loadBalancer.instances(instances);
+        URI uri = serviceInstance.getUri();
+        return restTemplate.getForObject(uri + "/payment/lb", String.class);
+    }
+}
+```
+
+##### 测试
+
+http://localhost/consumer/payment/lb
+
+![img](img/e00446b3-22cd-4943-9447-a388b5f249d7.png)
+
 # 九、OpenFeign服务接口调用
+
+
 
 # 十、Hystrix断路器
 
