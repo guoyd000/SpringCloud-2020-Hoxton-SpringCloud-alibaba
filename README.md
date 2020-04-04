@@ -1812,7 +1812,341 @@ public class OrderController {
 
 # 七、Consul服务注册与发现
 
+## 1、Consul简介
 
+### （1）是什么
+
+官网：https://www.consul.io/intro/index.html
+
+https://learn.hashicorp.com/consul
+
+![img](img/0a9a02ce-06be-462b-a154-f555b8f8dd2f.jpg)
+
+### （2）能干嘛
+
+![img](img/bef38941-1490-44b9-b2c4-0e7cd5b9d11b.jpg)
+
+### （3）去哪下
+
+https://www.consul.io/downloads.html
+
+### （4）怎么玩
+
+https://www.springcloud.cc/spring-cloud-consul.html
+
+![img](img/9e92c498-f037-4500-a5c9-c50e38587157.png)
+
+## 2、安装并运行Consul
+
+### （1）官网安装说明
+
+https://learn.hashicorp.com/consul/getting-started/install.html
+
+### （2）下载完成双击运行
+
+![img](img/9e11140f-ed00-459a-a692-7fa5b53ded71.jpg)
+
+### （3) 使用开发模式启动
+
+cmd到安装目录下，使用如下命令启动：
+
+```shell
+consul agent -dev
+```
+
+通过以下地址访问Consul的首页：
+
+http://localhost:8005
+
+![img](img/2e9d2c36-0ba9-4ffc-8d5d-1a26479f00fa.jpg)
+
+## 3、服务提供者
+
+### （1）新建Module支付服务cloud-providerconsul-payment8006
+
+### （2）修改cloud-providerconsul-payment8006的pom.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-providerconsul-payment8006</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-consul-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建application.yml文件
+
+ 
+
+```
+#consul服务端口号
+server:
+  port: 8006
+spring:
+  application:
+    name: consul-provider-payment
+  cloud: 
+    consul:
+      host: localhost
+      port: 8500
+      discovery:
+        service-name: ${spring.application.name}
+```
+
+### （4）新建主启动类Payment8006
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:17
+ */
+@SpringBootApplication
+@EnableDiscoveryClient //  该注解用于向使用consul或者Zookeeper作为注册中心时注册服务
+public class PaymentMain8006 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain8006.class, args);
+    }
+}
+```
+
+### （5）新建业务类Controller
+
+```java
+package com.atguigu.springcloud.controller;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import java.util.UUID;
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:43
+ */
+@RestController
+@Slf4j
+public class PaymentController {
+    @Value("${server.port}")
+    private String serverPort;
+    @GetMapping("/payment/consul")
+    public String paymentConsul() {
+        return "springcloud with consul: " + serverPort + "\t" + UUID.randomUUID().toString();
+    }
+}
+```
+
+### （6）测试
+
+![img](img/5b6844df-ba7a-4f23-9644-8bc90eca230c.jpg)
+
+![img](img/38045f6d-d6ab-4967-a69d-0fb4fc19ecdf.jpg)
+
+## 4、服务消费者
+
+### （1）新建Module消费服务cloud-consumerconsul-order80
+
+### （2）修改cloud-consumerconsul-order80的pom.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-consumerconsul-order80</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-consul-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建application.yml文件
+
+```yaml
+#consul服务端口号
+server:
+  port: 80
+spring:
+  application:
+    name: consul-consumer-order
+  cloud:
+    consul:
+      host: localhost
+      port: 8500
+      discovery:
+        service-name: ${spring.application.name}
+```
+
+### （4）新建主启动类OrderConsulMain80
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+/**
+ * @author 王柳
+ * @date 2020/4/2 14:17
+ */
+@SpringBootApplication
+@EnableDiscoveryClient //  该注解用于向使用consul或者Zookeeper作为注册中心时注册服务
+public class OrderConsulMain80 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderConsulMain80.class, args);
+    }
+}
+```
+
+### （5）新建业务类Controller
+
+```java
+package com.atguigu.springcloud.config;
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:11
+ */
+@Configuration
+public class ApplicationContextConfig {
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+ 
+
+```java
+package com.atguigu.springcloud.controller;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:12
+ */
+@RestController
+@Slf4j
+public class OrderController {
+    //    public static final String PAYMENT_URL = "http://localhost:8001";
+    public static final String PAYMENT_URL = "http://consul-provider-payment";
+    @Autowired
+    private RestTemplate restTemplate;
+    @GetMapping("/consumer/payment/consul")
+    public String paymentInfo() {
+        return restTemplate.getForObject(PAYMENT_URL + "/payment/consul", String.class);
+    }
+}
+```
+
+### （6）测试
+
+![img](img/6a864d7d-5701-4ab0-b647-e54f269955ab.jpg)
+
+## 5、三个注册中心异同点
+
+### （1）Eureka、Consul、Zookeeper异同
+
+![img](img/f2b6ce70-138e-4a3e-9603-672982d9252e.jpg)
+
+### （2）CAP理论
+
+![img](img/9a99ed87-84db-4e56-accc-6e3f58bed27a.jpg)
+
+![img](img/ceab4966-b68a-49a3-b72f-52f8f7e33ab4.jpg)
+
+![img](img/8b2c4c2f-dd79-4af0-9f24-cfb198b4843c.jpg)
+
+### （3）AP（Eureka）
+
+![img](img/897f54a5-3f3a-4a33-979c-965b62283b44.jpg)
+
+![img](img/58d437c7-5f55-46dd-baf2-e722cf9bd9d9.jpg)
+
+### （4）CP（Zookeeper/Consul）
+
+![img](img/7c1c9eae-ff45-48b0-9e65-c460e4b535ad.jpg)
+
+![img](img/953932a4-136b-4b02-aaf9-41701fb1602d.jpg)
 
 # 八、Ribbon负载均衡服务调用
 
