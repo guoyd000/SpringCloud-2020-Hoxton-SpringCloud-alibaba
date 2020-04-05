@@ -21,6 +21,7 @@
         <module>cloud-consumerzk-order80</module>
         <module>cloud-providerconsul-payment8006</module>
         <module>cloud-consumerconsul-order80</module>
+        <module>cloud-consumer-fegin-order80</module>
     </modules>
 
     <!-- 统一管理Jar包版本 -->
