@@ -2775,50 +2775,1060 @@ logging:
 
 # 十、Hystrix断路器
 
+## 1、概述
+
+### （1）分布式系统面临的问题
+
+#### ① 分布式系统面临的问题
+
+复杂分布式体系结构中的应用程序有数十个依赖关系，每个依赖关系在某些时候将不可避免地失败。
+
+![img](img/b512cc53-4d0e-4f7d-a41b-b30a25c9f5d1.jpg)
+
+#### ② 服务雪崩
+
+多个微服务之间调用的时候，假设微服务A调用微服务B和微服务C，微服务B和微服务C又调用其它的微服务，这就是所谓的“扇出”。如果扇出的链路上某个微服务的调用响应时间过长或者不可用，对微服务A的调用就会占用越来越多的系统资源，进而引起系统崩溃，所谓的“雪崩效应”.
+
+ 对于高流量的应用来说，单一的后端依赖可能会导致所有服务器上的所有资源都在几秒钟内饱和。比失败更糟糕的是，这些应用程序还可能导致服务之间的延迟增加，备份队列，线程和其他系统资源紧张，导致整个系统发生更多的级联故障。这些都表示需要对故障和延迟进行隔离和管理，以便单个依赖关系的失败，不能取消整个应用程序或系统。
+
+![img](img/cfd4d871-b055-4c36-a966-56d1d62d6184.jpg)
+
+### （2）是什么
+
+**Hystrix**是一个用于处理分布式系统的延迟和容错的开源库，在分布式系统里，许多依赖不可避免的会调用失败，比如超时、异常等，Hystrix能够保证在一个依赖出问题的情况下，不会导致整体服务失败，避免级联故障，以提高分布式系统的弹性。
+
+“断路器”本身是一种开关装置，当某个服务单元发生故障之后，通过断路器的故障监控（类似熔断保险丝），向调用方返回一个符合预期的、可处理的备选响应（FallBack），而不是长时间的等待或者抛出调用方无法处理的异常，这样就保证了服务调用方的线程不会被长时间、不必要地占用，从而避免了故障在分布式系统中的蔓延，乃至雪崩。
+
+### （3）能干嘛
+
+- 服务降级
+- 服务熔断
+- 服务限流
+- 接近实时的监控
+
+### （4）官网资料
+
+https://github.com/Netflix/Hystrix/wiki/How-To-Use
+
+### （5）Hystrix官宣，停更进维
+
+## 2、Hystrix重要概念
+
+### （1）服务降级
+
+![img](img/0a04ca38-da29-4621-8759-e0754cf3344d.jpg)
+
+![img](img/035595bd-79ff-4ee8-a054-6cc4a8d3b06a.jpg)
+
+### （2）服务熔断
+
+![img](img/3a0a4769-059c-40e4-b63f-7b1987f32d99.jpg)
+
+![img](img/e4529c0d-bfda-475f-8233-2ceaecf9106a.jpg)
+
+### （3）服务限流
+
+![img](img/5c2133d1-dcee-42a3-b3d9-4eaf83b7f7f4.jpg)
+
+## 3、Hystrix案例
+
+### （1）构建Hystrix案例
+
+#### ① 新建cloud-provider-hystrix-payment8001
+
+#### ② 修改pom.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloud-provider-hystrix-payment8001</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+#### ③ 新建application.yml
+
+```yaml
+server:
+  port: 8001
+
+spring:
+  application:
+    name: cloud-payment-hystrix-service
 
 
-# 十一、Zuul路由网关
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+```
 
+#### ④ 新建主启动类PaymentHystrixMain8001
 
+```java
+package com.atguigu.springcloud;
 
-# 十二、Gateway新一代网关
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
 
+/**
+ * @author 王柳
+ * @date 2020/4/13 16:23
+ */
+@SpringBootApplication
+@EnableEurekaClient
+public class PaymentHystrixMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentHystrixMain8001.class, args);
+    }
+}
+```
 
+#### ⑤ 新建业务类
 
-# 十三、SpringCloud Config分布式配置中心
+```java
+package com.atguigu.springcloud.service;
 
+import org.springframework.stereotype.Service;
 
+import java.util.concurrent.TimeUnit;
 
-# 十四、SpringCloud Bus 消息总线
+/**
+ * @author 王柳
+ * @date 2020/4/13 16:24
+ */
+@Service
+public class PaymentService {
 
- RabbitMQ/Kafka
+    public String paymentInfo_OK(Integer id) {
+        return "线程池：" + Thread.currentThread().getName() + "  paymentInfo_OK,id: " + id + "\t" + "O(∩_∩)O哈哈~";
+    }
 
-# 十五、SpringCloud Stream 消息驱动
+    public String paymentInfo_TimeOut(Integer id) {
+        Integer tumeNumber = 5;
+        try {
+            TimeUnit.SECONDS.sleep(tumeNumber);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return "线程池：" + Thread.currentThread().getName() + "  paymentInfo_TimeOut,id: " + id + "\t" + "O(∩_∩)O哈哈~" + "  耗时: " + tumeNumber + "秒钟";
+    }
+}
 
+```
 
+ 
 
-# 十六、SpringCloud Sleuth分布式请求链路跟踪
+```java
+package com.atguigu.springcloud.controller;
 
+import com.atguigu.springcloud.service.PaymentService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * @author 王柳
+ * @date 2020/4/13 16:25
+ */
+@RestController
+@Slf4j
+public class PaymentController {
 
-# 十七、SpringCloud Alibaba入门简介
+    @Autowired
+    private PaymentService paymentService;
 
+    @Value(("${server.port}"))
+    private String serverPort;
 
+    @GetMapping("payment/hystrix/ok/{id}")
+    public String paymentInfo_OK(@PathVariable("id") Integer id) {
+        String result = paymentService.paymentInfo_OK(id);
+        log.info("********result: " + result);
+        return result;
+    }
 
-# 十八、SpringCloud Alibaba Nacos服务注册和配置中心
+    @GetMapping("payment/hystrix/timeout/{id}")
+    public String paymentInfo_TimeOut(@PathVariable("id") Integer id) {
+        String result = paymentService.paymentInfo_TimeOut(id);
+        log.info("********result: " + result);
+        return result;
+    }
+}
 
+```
 
+#### ⑥ 正常测试
 
-# 十九、SpringCloud Alibaba Sentinel实现熔断与限流
+![img](img/6dd768a6-8415-4faf-b94d-ed57fb1ddc7b.jpg)
 
+### （2）高并发测试
 
+#### ① Jmeter压测测试
 
-# 二十、SpringCloud Alibaba Seata处理分布式事务
+Jmeter下载：https://downloads.apache.org/jmeter/binaries/
 
+开启Jmeter，来20000个并发压死8001,20000个请求都去访问paymentInfo_TimeOut
 
+![img](img/e613ea4b-dbe2-41d7-9c65-6f57ef21d19e.jpg)
 
-# 二十一、TX-LCN分布式事务
+![img](img/42c814a0-d8b2-4a39-bfba-06e5a93c8710.jpg)
 
+再来一个访问：http://localhost:8001/payment/hystrix/ok/31
 
+演示结果：两个都在自己转圈圈
 
-# 二十二、SpringBoot Admin监控中心
+![img](img/1d8e7a21-29ad-406e-bc1c-290eddb63935.jpg)
+
+#### ② Jmeter压测结论
+
+![img](img/ddcc3e1e-da98-4d3e-bd00-d2c1d93857c6.jpg)
+
+#### ③ 新建cloud-consumer-fegin-hystrix-order80
+
+修改pom.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloud-consumer-fegin-hystrix-order80</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-hystrix</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
+
+```
+
+新建application.yml
+
+```yaml
+server:
+  port: 80
+
+eureka:
+  client:
+    register-with-eureka: false
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/
+
+```
+
+新建主启动类
+
+```java
+package com.atguigu.springcloud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:03
+ */
+@SpringBootApplication
+@EnableFeignClients
+public class OrderHystrixMain80 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(OrderHystrixMain80.class, args);
+    }
+}
+
+```
+
+新建业务类
+
+```java
+package com.atguigu.springcloud.service;
+
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+/**
+ * @author 王柳
+ * @date 2020/4/5 12:42
+ */
+@Component
+@FeignClient(value = "CLOUD-PAYMENT-HYSTRIX-SERVICE")
+public interface PaymentHystrixService {
+
+    @GetMapping("/payment/hystrix/ok/{id}")
+    String paymentInfo_OK(@PathVariable("id") Integer id);
+
+    @GetMapping("/payment/hystrix/timeout/{id}")
+    String paymentInfo_TimeOut(@PathVariable("id") Integer id);
+}
+
+```
+
+ 
+
+```java
+package com.atguigu.springcloud.controller;
+
+import com.atguigu.springcloud.service.PaymentHystrixService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * @author 王柳
+ * @date 2020/4/13 16:25
+ */
+@RestController
+@Slf4j
+public class OrderHystrixController {
+
+    @Autowired
+    private PaymentHystrixService paymentHystrixService;
+
+    @Value(("${server.port}"))
+    private String serverPort;
+
+    @GetMapping("/consumer/payment/hystrix/ok/{id}")
+    public String paymentInfo_OK(@PathVariable("id") Integer id) {
+        String result = paymentHystrixService.paymentInfo_OK(id);
+        return result;
+    }
+
+    @GetMapping("/consumer/payment/hystrix/timeout/{id}")
+    public String paymentInfo_TimeOut(@PathVariable("id") Integer id) {
+        String result = paymentHystrixService.paymentInfo_TimeOut(id);
+        return result;
+    }
+}
+
+```
+
+正常测试：
+
+![img](img/cd2eea12-4559-4914-9bfc-80899525b240.png)
+
+高并发测试：
+
+![img](img/7976a248-e9df-4e0c-9a01-b43f27d6e2e3.jpg)
+
+![img](img/68355de9-60f1-4d6b-abf1-a22801ea4c13.jpg)
+
+### （3）故障现象和导致原因
+
+![img](img/e80c5e94-f9ac-40c8-885f-b534c5289b84.jpg)
+
+![img](img/98370669-09e3-47ae-985c-75d5bc17a6fc.jpg)
+
+### （4）如何解决？解决的要求
+
+![img](img/1d402c08-dbb5-4d91-ab05-bb06cc5ef7a8.jpg)
+
+**解决**：
+
+- 对方服务（8001）超时了，调用者（80）不能一直卡死等待，必须有服务降级；
+- 对方服务（8001）down机了，调用者（80）不能一直卡死等待，必须有服务降级；
+- 对方服务（8001）OK，调用者（80）自己出故障或有自我要求（自己的等待时间小于服务提供者），自己处理降级；
+
+### （5）服务降级
+
+降级配置：**@HystrixCommand**
+
+#### ① 8001先从自身找问题
+
+![img](img/a263d2a4-e2e4-4c4f-b12b-78ba86e150d0.jpg)
+
+#### ② 8001fallback
+
+##### 业务类启用**@HystrixCommand**
+
+```java
+@Service
+public class PaymentService {
+    ...
+        
+    /**
+     * 超时放，演示降级
+     *
+     * @param id
+     * @return
+     */
+    @HystrixCommand(fallbackMethod = "paymentInfo_TimeOutHandler", commandProperties = {
+            @HystrixProperty(name = "execution.isolation.thread.timeoutInMulliseconds", value = "3000")
+    })
+    public String paymentInfo_TimeOut(Integer id) {
+        Integer tumeNumber = 5;
+        try {
+            TimeUnit.SECONDS.sleep(tumeNumber);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return "线程池：" + Thread.currentThread().getName() + "  paymentInfo_TimeOut,id: " + id + "\t" + "O(∩_∩)O哈哈~" + "  耗时: " + tumeNumber + "秒钟";
+    }
+
+    public String paymentInfo_TimeOutHandler(Integer id) {
+        return "/(ToT)/调用支付接口超时或异常：\t" + "\t当前线程池名字：" + Thread.currentThread().getName();
+    }
+}
+```
+
+##### 主启动类激活@EnableCircuitBreaker
+
+```java
+package com.atguigu.springcloud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+
+/**
+ * @author 王柳
+ * @date 2020/4/13 16:23
+ */
+@SpringBootApplication
+@EnableEurekaClient
+@EnableCircuitBreaker
+public class PaymentHystrixMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentHystrixMain8001.class, args);
+    }
+}
+```
+
+##### @HystrixCommand报异常如何处理
+
+![img](img/1cae5f42-9718-47fe-ab16-cbb395ce377e.jpg)
+
+![img](img/49a7ab7d-0576-46b4-a36b-ccd97a1cd799.jpg)
+
+![img](img/a5190f9a-8edd-4e84-8b3d-4e295e0a50b8.jpg)
+
+#### ③ 80fallback
+
+![img](img/fa9052a3-6c97-425b-a767-bbe911fe0bc1.jpg)
+
+![img](img/77779354-92b6-4f5c-9125-257e6e7c468c.jpg)
+
+##### 修改application.yml，添加降级配置feign
+
+```yaml
+server:
+  port: 80
+
+eureka:
+  client:
+    register-with-eureka: false
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/
+
+feign:
+  hystrix:
+    enabled: true
+```
+
+##### 修改主启动类，@EnableHystrix
+
+```java
+@SpringBootApplication
+@EnableFeignClients
+@EnableHystrix
+public class OrderHystrixMain80 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(OrderHystrixMain80.class, args);
+    }
+}
+
+```
+
+##### 修改业务类OrderHystrixController
+
+```java
+@RestController
+@Slf4j
+public class OrderHystrixController {
+
+    @Autowired
+    private PaymentHystrixService paymentHystrixService;
+
+    ...
+        
+    @HystrixCommand(fallbackMethod = "paymentTimeOutFallbackMethod", commandProperties = {
+            @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "1500")
+    })
+    @GetMapping("/consumer/payment/hystrix/timeout/{id}")
+    public String paymentInfo_TimeOut(@PathVariable("id") Integer id) {
+        String result = paymentHystrixService.paymentInfo_TimeOut(id);
+        return result;
+    }
+
+    public String paymentTimeOutFallbackMethod(Integer id) {
+        return "我是消费者80，对方支付系统繁忙请10秒钟后再试或者自己运行出错请检查自己，w(ﾟДﾟ)w";
+    }
+}
+
+```
+
+![img](img/0fbc3377-3c5b-4541-bc49-e2070eeb93e7.png) 
+
+#### ④ 目前问题
+
+![img](img/36ae0379-174a-4165-8ca1-d831566d68d2.jpg)
+
+#### ⑤ 解决问题
+
+##### 定义全局fallback方法
+
+![img](img/f0cba301-321f-4a13-8cb7-0b3933286984.jpg)
+
+![img](img/448bc575-6804-46e2-b315-162caa947310.jpg)
+
+```java
+@RestController
+@Slf4j
+@DefaultProperties(defaultFallback = "payment_Global_FallBackMethod")
+public class OrderHystrixController {
+
+    @Autowired
+    private PaymentHystrixService paymentHystrixService;
+    
+    ...
+
+//    @HystrixCommand(fallbackMethod = "paymentTimeOutFallbackMethod", commandProperties = {
+////            @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "1500")
+////    })
+    @HystrixCommand
+    @GetMapping("/consumer/payment/hystrix/timeout/{id}")
+    public String paymentInfo_TimeOut(@PathVariable("id") Integer id) {
+        String result = paymentHystrixService.paymentInfo_TimeOut(id);
+        return result;
+    }
+
+    public String paymentTimeOutFallbackMethod(Integer id) {
+        return "我是消费者80，对方支付系统繁忙请10秒钟后再试或者自己运行出错请检查自己，w(ﾟДﾟ)w";
+    }
+
+    /**
+     * 全局fallback方法
+     *
+     * @return
+     */
+    public String payment_Global_FallBackMethod() {
+        return "Global异常处理信息，请稍后再试，~~~~(>_<)~~~~";
+    }
+}
+
+```
+
+![img](img/e8b5b6a0-4bc4-4c87-b1d0-dbeb467f7a54.png)
+
+##### fegin接口系列降级配置
+
+![img](img/1e1c597a-18f9-4af4-9293-dcce3a52ad9b.jpg)
+
+![img](img/02c774a3-a055-45d7-98e0-ab5d395ad212.jpg)
+
+![img](img/3c9badd3-5f4c-471f-9a2c-a7433bafa451.jpg)
+
+新建PaymentFallBackService
+
+```java
+package com.atguigu.springcloud.service;
+
+import org.springframework.stereotype.Component;
+
+/**
+ * @author 王柳
+ * @date 2020/4/13 17:59
+ */
+@Component
+public class PaymentFallBackService implements PaymentHystrixService{
+    @Override
+    public String paymentInfo_OK(Integer id) {
+        return "------PaymentFallBackService fall back-paymentInfo_OK,O(∩_∩)O哈哈~";
+    }
+
+    @Override
+    public String paymentInfo_TimeOut(Integer id) {
+        return "------PaymentFallBackService fall back-paymentInfo_TimeOut,~~~~(>_<)~~~~";
+    }
+}
+
+```
+
+修改application.yml
+
+![img](img/5c5c58d8-92d7-4a33-a774-0c4e45b1482f.jpg)
+
+修改PaymentHystrixService
+
+```java
+package com.atguigu.springcloud.service;
+
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+/**
+ * @author 王柳
+ * @date 2020/4/5 12:42
+ */
+@Component
+@FeignClient(value = "CLOUD-PAYMENT-HYSTRIX-SERVICE",fallback = PaymentFallBackService.class)
+public interface PaymentHystrixService {
+
+    @GetMapping("/payment/hystrix/ok/{id}")
+    String paymentInfo_OK(@PathVariable("id") Integer id);
+
+    @GetMapping("/payment/hystrix/timeout/{id}")
+    String paymentInfo_TimeOut(@PathVariable("id") Integer id);
+}
+
+```
+
+测试：
+
+![img](img/925bc1fa-b57f-4e51-bf0b-7dfada047a64.jpg)
+
+![img](img/e52ae9bc-564f-4750-b194-5459892ab564.jpg)
+
+![img](img/c377f953-1a76-44f9-8e1a-edf987bee243.png)
+
+### （6）服务熔断
+
+#### ① 断路器
+
+一句话就是家里的保险丝。
+
+#### ② 熔断是什么
+
+![img](img/af36ba2a-aa6f-451a-9565-7c16a0e127e4.jpg)
+
+#### ③ 实操
+
+##### 修改cloud-provider-hystrix-payment8001
+
+##### 修改PaymentService
+
+```java
+    @HystrixCommand(fallbackMethod = "paymentCircuitBreadker_fallback", commandProperties = {
+            @HystrixProperty(name = "circuitBreaker.enabled", value = "true"), // 是否开启断路器
+            @HystrixProperty(name = "circuitBreaker.requestVolumeThreshold", value = "10"), // 请求次数
+            @HystrixProperty(name = "circuitBreaker.sleepWindowInMilliseconds", value = "10000"), // 时间窗口期
+            @HystrixProperty(name = "circuitBreaker.errorThresholdPercentage", value = "60") // 失败率达到多少后跳闸
+    })
+    public String paymentCircuitBreadker(Integer id) {
+        if (id < 0) {
+            throw new RuntimeException("********id 不能为负数");
+        }
+        String serialNumber = IdUtil.simpleUUID();
+        return Thread.currentThread().getName() + "\t" + "调用成功，流水号: " + serialNumber;
+    }
+
+    public String paymentCircuitBreadker_fallback(Integer id) {
+        return "id 不能为负数,请稍后再试，~~~~(>_<)~~~~ id:  " + id;
+    }
+```
+
+![img](img/f0004493-1fed-4bbe-8e9e-b692a8007fab.jpg)
+
+**修改PaymentController**
+
+```java
+    /**
+     * 服务熔断
+     *
+     * @param id
+     * @return
+     */
+    @GetMapping("/payment/circuit/{id}")
+    public String paymentIpaymentCircuitBreadkernfo_TimeOut(@PathVariable("id") Integer id) {
+        String result = paymentService.paymentCircuitBreadker(id);
+        log.info("********result: " + result);
+        return result;
+    }
+```
+
+##### 测试
+
+![img](img/74d96be2-f9d5-4414-af21-0900aff78bfa.jpg)
+
+#### ④ 原理（小总结）
+
+##### 大神结论
+
+![img](img/443d1a85-1790-4b9b-8252-2c1911712994.jpg)
+
+##### 熔断类型
+
+![img](img/c6111062-5223-48f3-9c15-c39576c91cf9.jpg)
+
+##### 官网断路器流程图
+
+![img](img/1f4d87ad-a3c6-476e-9052-6196979b5cc6.jpg)
+
+##### 官网步骤
+
+![img](img/4e91aeee-e39d-4943-8fc6-1248e86f3a30.jpg)
+
+##### 断路器在什么情况下开始起作用
+
+![img](img/69cef2d1-8622-4616-9932-8ed0f04560db.jpg)
+
+##### 断路器开启或关闭的条件
+
+![img](img/e7f810d9-81ef-457c-a28c-14812bd6d75c.jpg)
+
+![img](img/d9ac1e99-3073-498b-bc07-bed9d57518df.jpg)
+
+##### All配置
+
+所有配置均可在HystrixPropertiesManager中找到：
+
+```java
+/**
+ * This class provides methods to set hystrix properties.
+ */
+public final class HystrixPropertiesManager {
+    ...
+}
+```
+
+![img](img/4c4d057e-8b5b-4f3a-85b0-1b3ac07b9f7c.jpg)
+
+![img](img/52bf6101-21f7-49b4-bdb4-10049d6ce5a7.jpg)
+
+![img](img/3f7d0839-6dd7-4381-a978-12dbdc034ada.jpg)
+
+![img](img/a3dbf55a-12e5-4384-a6ae-42d9ddc94159.jpg)
+
+![img](img/8095c24c-fd07-4a33-91a5-232dff5a7455.jpg)
+
+### （7）服务限流
+
+后面Alibaba的Sentinel说明。
+
+## 4、Hystrix工作流程
+
+官网资料：https://github.com/Netflix/Hystrix/wiki/How-To-Use
+
+![img](img/738eda7a-97ab-4a1a-ab2b-ffa1affce97a.jpg)
+
+### 
+
+![img](img/31fb36c8-da45-4a37-9b77-8285d29a629d.jpg)
+
+## 5、服务监控HystrixDashboard
+
+### （1）概述
+
+![img](img/b1ff29cf-e429-4a59-9ef5-2cc0da6fc274.jpg)
+
+### （2）仪表盘9001
+
+#### ① 新建cloud-consumer-hystrix-dashboard9001
+
+#### ② 修改pom.xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloud-consumer-hystrix-dashboard9001</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-hystrix-dashboard</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+
+```
+
+#### ③ 新建application.yml
+
+```yaml
+server:
+  port: 9001
+```
+
+#### ④ 新建主启动类HystrixDashboardMain9001
+
+```java
+package com.atguigu.springcloud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.hystrix.dashboard.EnableHystrixDashboard;
+
+/**
+ * @author 王柳
+ * @date 2020/4/13 18:44
+ */
+@SpringBootApplication
+@EnableHystrixDashboard
+public class HystrixDashboardMain9001 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(HystrixDashboardMain9001.class, args);
+    }
+}
+
+```
+
+#### ⑤监控依赖配置
+
+所有Provider微服务提供类（8001/8002/...)都需要监控依赖配置
+
+```xml
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+```
+
+#### ⑥ 测试
+
+启动cloud-consumer-hystrix-dashboard9001，该微服务后续将监控微服务8001
+
+http://localhost:9001/hystrix
+
+![img](img/f12dc974-436a-48bd-872d-625bcc9e34b4.png)
+
+### （3）断路器演示
+
+#### ① 修改cloud-provider-hystrix-payment8001
+
+注意：新版本Hystrix需要在主启动类PaymentHystrixMain8001中指定监控路径：
+
+```java
+package com.atguigu.springcloud;
+
+import com.netflix.hystrix.contrib.metrics.eventstream.HystrixMetricsStreamServlet;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+import org.springframework.context.annotation.Bean;
+
+/**
+ * @author 王柳
+ * @date 2020/4/13 16:23
+ */
+@SpringBootApplication
+@EnableEurekaClient
+@EnableCircuitBreaker
+public class PaymentHystrixMain8001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentHystrixMain8001.class, args);
+    }
+
+    /**
+     * 此配置是为了服务监控而配置，与服务容错本身无关，SpringCloud升级后的坑
+     * ServletRegistrationBean因为SpringBoot的默认路径不是“/hystrix.stream”，
+     * 只要在自己的项目里配置上下面的servlet就可以了
+     *
+     * @return
+     */
+    @Bean
+    public ServletRegistrationBean getServlet() {
+        HystrixMetricsStreamServlet streamServlet = new HystrixMetricsStreamServlet();
+        ServletRegistrationBean registrationBean = new ServletRegistrationBean(streamServlet);
+        registrationBean.setLoadOnStartup(1);
+        registrationBean.addUrlMappings("/hystrix.stream");
+        registrationBean.setName("HystrixMetricsStreamServlet");
+        return registrationBean;
+    }
+}
+
+```
+
+#### ②监控测试
+
+启动1个Eureka或几个Eureka集群均可，观察监控窗口。
+
+#### ③ 9001监控8001
+
+![img](img/d1c68ed9-90c6-4d25-a34d-07eff2b143fe.jpg)
+
+#### ④ 测试地址
+
+http://localhost:8001/payment/hystrix/timeout/31
+
+[http://localhost:8001/payment/hystrix/timeout/-31](http://localhost:8001/payment/hystrix/timeout/31)
+
+先访问正确地址，再访问错误地址，再正确地址，会发现图示断路器都是慢慢放开的。
+
+请求成功：
+
+![img](img/c5866dbc-73be-472b-932a-01b7aa6ed576.jpg)
+
+请求失败：
+
+![img](img/2353597e-4742-4163-9553-9f561dc8fd75.jpg)
+
+#### ⑤ 如何看
+
+##### 7色
+
+##### 1圈
+
+实心圆：共有两种含义。它通过颜色的变化代表了实例的健康程度，它的健康度从绿色<黄色<橙色<红色递减。
+
+该实心圆除了颜色的变化之外，它的大小也会根据实例的请求流量发生变化，流量越大该实心圆就越大。所以通过该实心圆的展示，就可以在大量的实例中快速的发现故障实例和高压力实例。
+
+##### 1线
+
+曲线：用来记录2分钟内流量的相对变化，可以通过它来观察到流量的上升和下降趋势。
+
+##### 整图说明
+
+![img](img/6f270d98-9b1c-4c32-950d-267bfc322e0a.jpg)
+
+![img](img/b7d5e2af-7025-4961-9dfb-510a748e519c.jpg)
+
+#### ⑥ 搞懂一个才能看懂复杂的
+
+![img](img/4b5c57dc-d442-432a-bdd3-fccde0c23fdf.jpg)
+

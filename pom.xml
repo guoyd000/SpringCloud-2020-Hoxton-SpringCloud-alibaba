@@ -22,6 +22,9 @@
         <module>cloud-providerconsul-payment8006</module>
         <module>cloud-consumerconsul-order80</module>
         <module>cloud-consumer-fegin-order80</module>
+        <module>cloud-provider-hystrix-payment8001</module>
+        <module>cloud-consumer-fegin-hystrix-order80</module>
+        <module>cloud-consumer-hystrix-dashboard9001</module>
     </modules>
 
     <!-- 统一管理Jar包版本 -->
