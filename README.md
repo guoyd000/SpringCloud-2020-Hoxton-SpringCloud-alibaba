@@ -4072,3 +4072,156 @@ public class WebFilter extends ZuulFilter {
 
 # 二十二、SpringBoot Admin监控中心
 
+参考[SpringCloud实战学习](wiz://open_document?guid=a6a8e6ec-bf20-4a66-9d7b-4fbd37fb1d26&kbguid=&private_kbguid=9e15e816-792d-4528-9d21-a849cc4117d5)中的SpringBoot Admin章节。
+
+GitHub地址： [https://github.com/wangliu1102/SpringCloudStudy-Practical](https://github.com/wangliu1102/SpringCloudStudy-Practical.git)
+
+## 1、导入相关依赖，导入security是为了登录验证
+
+邮件服务可以配置admin在监控服务up或down的时候发送邮件！！！
+
+```xml
+<properties>
+        <spring-boot-admin.version>2.1.6</spring-boot-admin.version>
+    </properties>
+    <dependencies>
+        <!--Tomcat: java.lang.IllegalStateException: Calling [asyncError()] is not valid for a request with Async state [MUST_DISPATCH]-->
+        <!-- 使用jetty来替换Tomcat解决上述错误-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-tomcat</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jetty</artifactId>
+        </dependency>
+        <!--监控服务端-->
+        <dependency>
+            <groupId>de.codecentric</groupId>
+            <artifactId>spring-boot-admin-starter-server</artifactId>
+            <version>${spring-boot-admin.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-security</artifactId>
+        </dependency>
+        
+        <!--邮件服务，都用的话可以放在父POM文件中-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+    </dependencies>
+```
+
+## 2、修改配置文件application.yml
+
+```yml
+server:
+  port: 8769
+spring:
+  application:
+    name: admin-monitor
+  #登录SpringBoot Admin后台监控的用户名和密码
+  security:
+    user:
+      name: admin
+      password: admin
+  #集成邮件通知，当监控的微服务down掉或up起来了，都会发送邮件通知
+  mail:
+    host: smtp.qq.com
+    username: wangliu.ah@qq.com
+    password: ydiekcpezegmjicc
+  boot:
+    admin:
+      notify:
+        mail:
+          to: wangliu.ah@qq.com
+          from: wangliu.ah@qq.com
+#哪个客户端要监控所有端点，就添加下面代码，否则只监控到很少的信息，例如oauth2服务
+management: #暴露actuator的所有端点
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint: #health endpoint是否必须显示全部细节。默认情况下, /actuator/health 是公开的，并且不显示细节
+    health:
+      show-details: always
+eureka:
+  client:
+    registry-fetch-interval-seconds: 5  #表示eureka client间隔多久去拉取服务注册信息，默认为30秒
+    service-url:
+      defaultZone: http://admin:123456@eureka7001.com:7001/eureka,http://admin:123456@eureka7002.com:7002/eureka
+  instance:
+    lease-renewal-interval-in-seconds: 10  #表示eureka client发送心跳给server端的频率
+    health-check-url-path: /actuator/health  #健康检查页面的URL路径
+    instance-id: admin-monitor8769 #自定义服务名称信息
+    prefer-ip-address: true #访问路径可以显示IP地址
+      #注册给eureka时告诉eureka自己的密码，否则报错
+    metadata-map:
+      user.name: ${spring.security.user.name}
+      user.password: ${spring.security.user.password}
+info:
+  app.name: springcloud-server
+  company.name: www.wangliu.com
+  build.artifactId: '@project.artifactId@'
+  build.version: '@project.version@'
+```
+
+## （3）开启注解
+
+```java
+@EnableAdminServer
+```
+
+![img](img/5d42b9c5-053b-4f31-9245-b5e99d8e41aa.png)
+
+## （4）增加Security相关配置
+
+```java
+/**
+ * @author 王柳
+ * @date 2019/11/7 15:22
+ */
+@Configuration
+public class SecuritySecureConfig extends WebSecurityConfigurerAdapter {
+    private final String adminContextPath;
+    public SecuritySecureConfig(AdminServerProperties adminServerProperties) {
+        this.adminContextPath = adminServerProperties.getContextPath();
+    }
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        SavedRequestAwareAuthenticationSuccessHandler successHandler = new SavedRequestAwareAuthenticationSuccessHandler();
+        successHandler.setTargetUrlParameter("redirectTo");
+        successHandler.setDefaultTargetUrl(adminContextPath + "/monitor");
+        http.authorizeRequests()
+                .antMatchers(adminContextPath + "/assets/**").permitAll()
+                .antMatchers(adminContextPath + "/login").permitAll()
+                .anyRequest().authenticated()
+                .and()
+                .formLogin().loginPage(adminContextPath + "/login").successHandler(successHandler).and()
+                .logout().logoutUrl(adminContextPath + "/logout").and()
+                .httpBasic().and()
+                .csrf()
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .ignoringAntMatchers(
+                        adminContextPath + "/instances",
+                        adminContextPath + "/actuator/**"
+                );
+    }
+}
+```
+
+## **（5）测试**
+
+**注意：SpringBoot Admin 注册进Eureka后，也可以监控到注册进Eureka的其他微服务**。
+
+访问：http://项目实际地址:端口号
+
+![img](img/27a81a73-5e1e-4dc9-85e0-75d41fce3c5d.png)
