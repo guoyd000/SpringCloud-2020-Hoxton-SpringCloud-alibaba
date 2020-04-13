@@ -3832,3 +3832,243 @@ http://localhost:8001/payment/hystrix/timeout/31
 
 ![img](img/4b5c57dc-d442-432a-bdd3-fccde0c23fdf.jpg)
 
+# 十一、Zuul路由网关
+
+参考[SpringCloud实战学习](wiz://open_document?guid=a6a8e6ec-bf20-4a66-9d7b-4fbd37fb1d26&kbguid=&private_kbguid=9e15e816-792d-4528-9d21-a849cc4117d5)中的Zuul章节。
+
+GitHub地址： [https://github.com/wangliu1102/SpringCloudStudy-Practical](https://github.com/wangliu1102/SpringCloudStudy-Practical.git)
+
+## 1、Zuul简介说明
+
+Zuul包含了对请求的路由和过滤两个最主要的功能：
+
+其中路由功能负责将外部请求转发到具体的微服务实例上，是实现外部访问统一入口的基础。而过滤器功能则负责对请求的处理过程进行干预，是实现请求校验、服务聚合等功能的基础。Zuul和Eureka进行整合，将Zuul自身注册为Eureka服务治理下的应用，同时从Eureka中获得其他微服务的消息，也即以后的访问微服务都是通过Zuul跳转后获得。
+
+注意：Zuul服务最终还是会注册进Eureka。
+
+ **提供=代理+路由+过滤三大功能**
+
+## 2、如何使用
+
+### （1）导入相关依赖
+
+```xml
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-zuul</artifactId>
+        </dependency>
+```
+
+### （2）开启注解
+
+```java
+@EnableZuulProxy
+```
+
+![img](img/11df6556-5dfe-4c1d-ac86-b1c3a8147492.png)
+
+### （3）修改application.yml配置文件
+
+zuul也需要注册进注册中心，所以也需要添加Eureka客户端相关配置
+
+```yaml
+server:
+  port: 9527
+spring:
+  application:
+    name: gateway
+#prefix表示访问前缀，ignored-services忽略所有请求，不包括zuul.routes指定的路径,
+#zuul:
+#  prefix: /abc
+#  ignored-services: "*"
+# routes to serviceId 这里边是通过serviceId来绑定地址，当在路径后添加/api-a/   则是访问service-A对应的服务。
+# ** 表示多层级，*表示单层级
+zuul:
+  routes:
+    defalutApi:
+      path: /api/**
+      serviceId: student
+    apiB:
+      path: /admin/**
+      serviceId: course
+    oa:
+      path: /oa/**
+      serviceId: oa
+    member:
+      path: /member/**
+      serviceId: member
+      sensitiveHeaders: "*"
+    auth:
+      path: /auth/**
+      serviceId: oauth2
+      sensitiveHeaders: "*"
+  retryable: false
+  ignored-services: "*"
+  ribbon:
+    eager-load:
+      enabled: true
+  host:
+    connect-timeout-millis: 3000
+    socket-timeout-millis: 3000
+  add-proxy-headers: true
+# Zuul超时
+# 对于通过serviceId路由的服务,需要设置两个参数：ribbon.ReadTimeout 和ribbon.SocketTimeout
+# 对于通过url路由的服务,需要设置两个参数：zuul.host.socket-timeout-millis或zuul.host.connect-timeout-millis
+ribbon:
+      ReadTimeout: 3000  # 单位毫秒数
+  SocketTimeout: 3000
+  MaxAutoRetries: 1
+  MaxAutoRetriesNextServer: 2
+  eureka:
+    enabled: true
+hystrix:
+  command:
+    default:
+      execution:
+        timeout:
+          enabled: true
+        isolation:
+          thread:
+            timeoutInMilliseconds: 24000
+eureka:
+  client:
+    service-url:
+      defaultZone: http://admin:123456@eureka7001.com:7001/eureka,http://admin:123456@eureka7002.com:7002/eureka
+  instance:
+      instance-id: gateway9527 #自定义服务名称信息
+      prefer-ip-address: true #访问路径可以显示IP地址
+info:
+  app.name: springcloud-server
+  company.name: www.wangliu.com
+  build.artifactId: '@project.artifactId@'
+  build.version: '@project.version@'
+```
+
+### （4）解决客户端调用跨域问题
+
+可以在代码中添加相关配置信息
+
+```java
+/**
+ * @Description 解决客户端调用跨域问题
+ * @Author 王柳
+ * @Date 2019/10/11 8:54
+ */
+@Component
+@Configuration
+public class CorsConfig {
+    @Bean
+    public CorsFilter corsFilter() {
+        final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        final CorsConfiguration corsConfiguration = new CorsConfiguration();
+        corsConfiguration.setAllowCredentials(true);
+        corsConfiguration.setMaxAge(18000L);
+        corsConfiguration.addAllowedOrigin("*");
+        corsConfiguration.addAllowedHeader("*");
+        source.registerCorsConfiguration("/**", corsConfiguration);
+        return new CorsFilter(source);
+    }
+}
+```
+
+### （5）Zuul还有过滤器的功能
+
+可以自定义路由过滤器，添加自定义过滤规则
+
+```java
+/**
+ * @Description 自定义路由过滤器
+ * @Author 王柳
+ * @Date 2019/10/11 8:55
+ */
+@Slf4j
+@Component
+public class WebFilter extends ZuulFilter {
+    /**
+     * 该函数需要返回一个字符串来代表过滤器的类型，而这个类型就是在http请求过程中定义的各个阶段
+     * pre: 可以在请求被路由之前被调用
+     * routing: 在路由请求时被调用
+     * post: 在routing和error 过滤器之后被调用
+     * error: 处理请求时发生错误时被调用
+     *
+     * @return
+     */
+    @Override
+    public String filterType() {
+        return "pre";
+    }
+    /**
+     * 通过int的值来定义过滤器的执行顺序，数值越小优先级越高
+     *
+     * @return
+     */
+    @Override
+    public int filterOrder() {
+        return 0;
+    }
+    /**
+     * 返回一个boolean值来判断该过滤器是否要执行，我们可以通过此方法指定过滤器的有效范围。
+     *
+     * @return
+     */
+    @Override
+    public boolean shouldFilter() {
+        return false;
+    }
+    /**
+     * 过滤器的具体逻辑，在该函数中，我们可以实现自定义的过滤器逻辑，来确定是否要拦截当前请求，不对其进行后续的路由，
+     * 或是在请求路由返回结果之后对处理的结果进行一些加工等
+     *
+     * @return
+     * @throws ZuulException
+     */
+    @Override
+    public Object run() throws ZuulException {
+        //todo...自定义过滤规则
+        return null;
+    }
+}
+```
+
+# 十二、Gateway新一代网关
+
+
+
+# 十三、SpringCloud Config分布式配置中心
+
+
+
+# 十四、SpringCloud Bus 消息总线
+
+ RabbitMQ/Kafka
+
+# 十五、SpringCloud Stream 消息驱动
+
+
+
+# 十六、SpringCloud Sleuth分布式请求链路跟踪
+
+
+
+# 十七、SpringCloud Alibaba入门简介
+
+
+
+# 十八、SpringCloud Alibaba Nacos服务注册和配置中心
+
+
+
+# 十九、SpringCloud Alibaba Sentinel实现熔断与限流
+
+
+
+# 二十、SpringCloud Alibaba Seata处理分布式事务
+
+
+
+# 二十一、TX-LCN分布式事务
+
+
+
+# 二十二、SpringBoot Admin监控中心
+
