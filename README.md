@@ -4032,7 +4032,540 @@ public class WebFilter extends ZuulFilter {
 
 # 十二、Gateway新一代网关
 
+## 1、概述简介
 
+### （1）官网
+
+上一代zuul1.X：https://github.com/Netflix/zuul/wiki
+
+当前Gateway：https://cloud.spring.io/spring-cloud-static/spring-cloud-gateway/2.2.2.RELEASE/reference/html/
+
+### （2）是什么
+
+#### ① 是什么
+
+![img](img/ce6d41f9-68d0-483a-b7c4-6e64886deaa2.jpg)
+
+![img](img/9b4993b9-9070-45e9-b07c-bf207e7067c4.jpg)
+
+#### ② 概述
+
+![img](img/c0af03e3-3ef6-4c9d-a700-69afd49c54c4.jpg)
+
+![img](img/a210f269-46b0-43c6-b03c-0e3b20f1ef48.jpg)
+
+#### ③ 一句话
+
+![img](img/abac9607-1e14-49bf-a81a-2514d26f5685.jpg)
+
+#### ④ 源码架构
+
+![img](img/7794ca92-e6ff-4295-af84-40c675747e54.jpg)
+
+### （3）能干嘛
+
+![img](img/f2e9099f-070e-4804-9f93-fc4cc19f0949.jpg)
+
+### （4）微服务架构中网关在哪里
+
+![img](img/675060d9-5edd-4236-a82f-00c85ab0936a.jpg)
+
+### （5）有Zuul了怎么又出来了Gateway
+
+#### ① 为什么选择Gateway
+
+- ##### Netflix不太靠谱，zuul2.0一直跳票，迟迟不发布
+
+![img](img/c3c0c22c-f155-4005-9970-2d7ae4a83e6b.jpg)
+
+- ##### SpringCloud Gateway具有如下特性
+
+![img](img/5439f9b0-2855-4a8b-9c14-14868bf6fd7f.jpg)
+
+- ##### SpringCloud Gateway与Zuul的区别
+
+![img](img/c458a222-cb6f-48ea-bb12-969991daa034.jpg)
+
+#### ② Zuul1.x模型
+
+![img](img/746d01ed-4a78-476d-b5ea-d53c15805259.jpg)
+
+![img](img/3bd3ca96-0ae8-4b0a-a988-1d72e0891d54.jpg)
+
+#### ③ Gateway模型
+
+WebFlux官网资料：https://docs.spring.io/spring/docs/5.2.5.RELEASE/spring-framework-reference/web-reactive.html#spring-webflux
+
+![img](img/49958a46-a74c-4be6-abca-20a05e0d57dd.jpg)
+
+![img](img/ce22d10a-e198-41e5-a389-3904e559ddc0.jpg)
+
+## 2、三大核心概念
+
+### （1）Route(路由)
+
+![img](img/125316d7-5f74-470e-ad2f-22519953f748.png)
+
+### （2）Predicate(断言)
+
+![img](img/fc029e7d-2998-4a63-9180-8a51652b7b89.jpg)
+
+### （3）Filter(过滤)
+
+![img](img/09a0256c-809f-4cf5-9dd2-50e785a61dec.png)
+
+### （4）总体
+
+![img](img/550b07ff-236c-45ca-9995-9426fabd2d04.jpg)
+
+## 3、Gateway工作流程
+
+### （1）官网总结
+
+![img](img/4352ccb4-83f8-4533-8df5-0c909f15f03f.png)
+
+![img](img/f21a4706-4a1d-45ef-9b5b-bda63e35629b.jpg)
+
+### （2）核心逻辑
+
+**路由转发 + 执行过滤器链**
+
+## 4、入门配置
+
+### （1）新建cloud-gateway-gateway9527
+
+### （2）修改pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-gateway-gateway9527</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId> 
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建application.yml
+
+```yaml
+server:
+  port: 9527
+spring:
+  application:
+    name: cloud-gateway
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+  instance:
+    hostname: cloud-gateway-service
+```
+
+### （4）新建主启动类GatewayMain9527
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+/**
+ * @author 王柳
+ * @date 2020/4/15 15:12
+ */
+@SpringBootApplication
+@EnableEurekaClient
+public class GatewayMain9527 {
+    public static void main(String[] args) {
+        SpringApplication.run(GatewayMain9527.class, args);
+    }
+}
+```
+
+### （5）9527网关做路由映射
+
+![img](img/7f5a7ed8-36db-4927-bdb7-043a04dcdc9f.jpg)
+
+### （6）application.yml新增网关配置
+
+```yaml
+server:
+  port: 9527
+spring:
+  application:
+    name: cloud-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: payment_routh #路由的ID，没有固定规则但要求唯一，建议配合服务名
+          uri: http://localhost:8001 #匹配后提供的路由地址
+          predicates:
+            - Path=/payment/get/** #断言，路径相匹配的进行路由
+          
+        - id: payment_routh2 #路由的ID，没有固定规则但要求唯一，建议配合服务名
+          uri: http://localhost:8001 #匹配后提供的路由地址
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+  instance:
+    hostname: cloud-gateway-service
+```
+
+### （7）测试
+
+启动7001、7002、8001和9527
+
+![img](img/deb500ba-4d07-476a-8c7c-33eda6b59704.jpg)
+
+![img](img/de5742cf-8451-4a5a-bbd3-e25510053356.jpg)
+
+### （8）Gateway路由的两种方式
+
+#### ① 在配置文件yml中配置
+
+#### ② 代码中注入RouteLocator的Bean
+
+```java
+package com.atguigu.springcloud.config;
+import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+/**
+ * @author 王柳
+ * @date 2020/4/15 15:24
+ */
+@Configuration
+public class GatewayConfig {
+    /**
+     * 配置了一个id为path_route_atguigu的路由规则，
+     * 当访问地址http://localhost:9527/guonei时会自动转发到地址http://news.baidu.com/guonei
+     *
+     * @param routeLocatorBuilder
+     * @return
+     */
+    @Bean
+    public RouteLocator customRouteLocator(RouteLocatorBuilder routeLocatorBuilder) {
+        RouteLocatorBuilder.Builder routes = routeLocatorBuilder.routes();
+        routes.route("path_route_atguigu",
+                r -> r.path("/guonei")
+                        .uri("http://news.baidu.com/guonei")).build();
+        return routes.build();
+    }
+}
+```
+
+## 5、通过微服务名实现动态路由
+
+![img](img/ec1a42ac-4267-4635-ab52-261a5e18d4c2.jpg)
+
+修改cloud-gateway-gateway9527下的application.yml:
+
+```yaml
+server:
+  port: 9527
+spring:
+  application:
+    name: cloud-gateway
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true #开启从注册中心动态创建路由的功能，利用微服务名进行路由
+      routes:
+        - id: payment_routh #路由的ID，没有固定规则但要求唯一，建议配合服务名
+#          uri: http://localhost:8001 #匹配后提供的路由地址
+          uri: lb://cloud-payment-service #匹配后提供服务的路由地址
+          predicates:
+            - Path=/payment/get/** #断言，路径相匹配的进行路由
+        - id: payment_routh2 #路由的ID，没有固定规则但要求唯一，建议配合服务名
+#          uri: http://localhost:8001 #匹配后提供的路由地址
+          uri: lb://cloud-payment-service #匹配后提供服务的路由地
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+eureka:
+  client: #客户端注册进eureka服务列表内
+    #表示是否将自己注册进EurekaServer默认为true
+    register-with-eureka: true
+    #是否从EurekaServer抓取已有的注册信息，默认为true。单节点无所谓，集群必须设置为true才能配合ribbon使用负载均衡
+    fetch-registry: true
+    service-url:
+      #defaultZone: http://localhost:7001/eureka
+      defaultZone: http://eureka7001.com:7001/eureka/,http://eureka7002.com:7002/eureka/ #集群版
+  instance:
+    hostname: cloud-gateway-service
+```
+
+![img](img/7eff4c6b-a8ea-4419-94f4-c07b448c94af.jpg)
+
+## 6、Predicate(断言)的使用
+
+### （1）是什么
+
+![img](img/e80e730f-b561-44ac-aaa0-656ada9c0482.jpg)
+
+### （2）Route Predicate Factorices
+
+![img](img/39a23516-d451-4764-9bf5-b04b6fb597ca.jpg)
+
+![img](img/7b6914fc-b07a-4129-96d8-102e19f57581.jpg)
+
+### （3）常用的Route Predicate
+
+#### ① After Route Predicate
+
+![img](img/ed9a87cb-3594-4823-8457-48aed40321f9.jpg)
+
+![img](img/6e2b08c9-a800-451a-ac76-325dafcc470e.jpg)
+
+```java
+    public static void main(String[] args) {
+        ZonedDateTime zbj = ZonedDateTime.now(); // 默认时区
+        System.out.println(zbj);
+        // 2020-04-15T16:42:02.866+08:00[Asia/Shanghai]
+    }
+```
+
+ 
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+```
+
+#### ② Before Route Predicate 
+
+类似于After Route Predicate
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+            - Before=2020-04-15T15:42:02.866+08:00[Asia/Shanghai]
+```
+
+#### ③ Between Route Predicate 
+
+类似于After Route Predicate，范围用，隔开
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+            - Before=2020-04-15T15:42:02.866+08:00[Asia/Shanghai]
+            - Between=2020-04-15T16:42:02.866+08:00[Asia/Shanghai],2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+```
+
+#### ④ Cookie Route Predicate 
+
+![img](img/19d19c42-d1ec-480e-8c3e-ec2b97fa93c7.jpg)
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+#            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Before=2020-04-15T15:42:02.866+08:00[Asia/Shanghai]
+#            - Between=2020-04-15T16:42:02.866+08:00[Asia/Shanghai],2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+            - Cookie=username,wangliu
+```
+
+##### 不带cookies访问
+
+![img](img/ff62ade6-95cc-41ff-914c-c6becea46af9.jpg)
+
+##### 带cookies访问
+
+![img](img/1aacec90-1dad-437d-ad86-1b54f48bb2ea.jpg)
+
+#### ⑤ Header Route Predicate 
+
+![img](img/7d072cb5-6422-4e98-8f3e-349aec9c8e44.jpg)
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+#            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Before=2020-04-15T15:42:02.866+08:00[Asia/Shanghai]
+#            - Between=2020-04-15T16:42:02.866+08:00[Asia/Shanghai],2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Cookie=username,wangliu
+            - Header=X-Request-Id,\d+ # 请求头要有X-Request-Id属性并且值为整数的正则表达式
+```
+
+![img](img/2c3de927-e658-4f5a-89ac-038300fd5288.jpg)
+
+#### ⑥ Host Route Predicate 
+
+![img](img/48b8ee15-8a22-4077-8a9f-d540cdb12730.jpg)
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+#            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Before=2020-04-15T15:42:02.866+08:00[Asia/Shanghai]
+#            - Between=2020-04-15T16:42:02.866+08:00[Asia/Shanghai],2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Cookie=username,wangliu
+#            - Header=X-Request-Id,\d+ # 请求头要有X-Request-Id属性并且值为整数的正则表达式
+            - Host=**.atguigu.com
+```
+
+![img](img/f72edd2b-80f4-494a-9e4b-39e1e920cc5d.jpg)
+
+#### ⑦ Method Route Predicate 
+
+![img](img/584937e1-46d0-4e52-a8fe-58a45c8993da.jpg)
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+#            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Before=2020-04-15T15:42:02.866+08:00[Asia/Shanghai]
+#            - Between=2020-04-15T16:42:02.866+08:00[Asia/Shanghai],2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Cookie=username,wangliu
+#            - Header=X-Request-Id,\d+ # 请求头要有X-Request-Id属性并且值为整数的正则表达式
+#            - Host=**.atguigu.com
+            - Method=GET
+```
+
+#### ⑧ Path Route Predicate 
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+```
+
+#### ⑨ Query Route Predicate 
+
+![img](img/83dba2a1-1a5a-443a-ac50-52c6074fea1d.jpg)
+
+```yaml
+          predicates:
+            - Path=/payment/lb/** #断言，路径相匹配的进行路由
+#            - After=2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Before=2020-04-15T15:42:02.866+08:00[Asia/Shanghai]
+#            - Between=2020-04-15T16:42:02.866+08:00[Asia/Shanghai],2020-04-15T17:42:02.866+08:00[Asia/Shanghai]
+#            - Cookie=username,wangliu
+#            - Header=X-Request-Id,\d+ # 请求头要有X-Request-Id属性并且值为整数的正则表达式
+#            - Host=**.atguigu.com
+#            - Method=GET
+            - Query=username,\d+ #要有参数名username并且值还有是整数的才能路由
+```
+
+![img](img/05be2b71-13e2-4057-8106-89438ed6180d.jpg)
+
+#### ⑩ 小总结
+
+![img](img/1248dda3-8e68-4a5a-947e-ff5a8477b994.png)
+
+## 7、Filter(过滤)的使用
+
+### （1）是什么
+
+![img](img/dad9102f-dd77-4787-a358-759ab7015e9b.jpg)
+
+### （2）SpringCloud Gateway的Filter
+
+![img](img/0f9081ba-2713-4a10-8d5a-1c0053be3279.jpg)
+
+gatewayfilter：https://cloud.spring.io/spring-cloud-static/spring-cloud-gateway/2.2.2.RELEASE/reference/html/#gatewayfilter-factories
+
+global-filters：https://cloud.spring.io/spring-cloud-static/spring-cloud-gateway/2.2.2.RELEASE/reference/html/#global-filters
+
+### （3）常用的GatewayFilter
+
+![img](img/4f5725d4-bd19-4a31-a75c-b6a458bc5dce.jpg)
+
+### （4）自定义过滤器
+
+![img](img/4c3dd082-c8e2-48bf-a888-9b3dbf9f16d8.jpg)
+
+```java
+package com.atguigu.springcloud.filter;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.core.Ordered;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
+import java.util.Date;
+/**
+ * @author 王柳
+ * @date 2020/4/15 17:22
+ */
+@Slf4j
+@Component
+public class MyLogGatewayFilter implements GlobalFilter, Ordered {
+    @Override
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        log.info("***************come in MyLogGatewayFilter: " + new Date());
+        String uname = exchange.getRequest().getQueryParams().getFirst("username");
+        if (uname == null) {
+            log.info("***************用户名为null，非法用户，~~~~(>_<)~~~~");
+            exchange.getResponse().setStatusCode(HttpStatus.NOT_ACCEPTABLE);
+        }
+        return chain.filter(exchange);
+    }
+    @Override
+    public int getOrder() {
+        return 0;
+    }
+}
+```
+
+正确：http://localhost:9527/payment/lb?username=23
+
+错误：http://localhost:9527/payment/lb?username
 
 # 十三、SpringCloud Config分布式配置中心
 
