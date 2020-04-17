@@ -1,0 +1,25 @@
+server:
+  port: 3344
+spring:
+  application:
+    name: cloud-config-center
+  # 配置中心
+  cloud:
+    config:
+      server:
+        git:
+#          uri: git@github.com:wangliu1102/microservicecloud-config.git
+#          search-paths:
+#            - microservicecloud-config/cloud2020
+          uri: https://github.com/wangliu1102/microservicecloud-config
+          search-paths: /cloud2020 #git仓库地址下的相对地址 多个用逗号","分割
+#          force-pull: true #强制拉入Git存储库
+          # 访问git仓库的用户密码 如果Git仓库为公开仓库，可以不填写用户名和密码，如果是私有仓库需要填写
+#          username: ******
+#          password: ******
+          ### 读取分支
+      label: master
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka

@@ -4569,7 +4569,386 @@ public class MyLogGatewayFilter implements GlobalFilter, Ordered {
 
 # 十三、SpringCloud Config分布式配置中心
 
+参考[SpringCloud实战学习](wiz://open_document?guid=a6a8e6ec-bf20-4a66-9d7b-4fbd37fb1d26&kbguid=&private_kbguid=9e15e816-792d-4528-9d21-a849cc4117d5)中的SpringCloud Config章节-----》**配置到本地存储。**
 
+GitHub地址： [https://github.com/wangliu1102/SpringCloudStudy-Practical](https://github.com/wangliu1102/SpringCloudStudy-Practical.git)
+
+**这里我们讲的是配置到Git服务器上存储**。
+
+## 1、概述
+
+### （1）分布式系统面临的---配置问题
+
+微服务意味着要将单体应用中的业务拆分成一个个子服务，每个服务的粒度相对较小，因此系统中会出现大量的服务。由于每个服务都需要必要的配置信息才能运行，所以一套集中式的、动态的配置管理设施是必可不少的。SpringCloud提供了ConfigServer来解决这个问题，我们每一个微服务自己带着一个application.yml，上百个配置文件的管理。
+
+### （2）是什么
+
+![img](img/6b148a6e-f7a5-4bb5-b74a-bb6af4cf8997.jpg)
+
+SpringCloud Config为微服务架构中的微服务提供集中化的外部配置支持，配置服务器为各个不同微服务应用的所有环境提供了一个中心化的外部配置。
+
+**怎么玩：**
+
+SpringCloud Config分为服务端和客户端两部分。
+
+服务端也称为分布式配置中心，它是一个独立的微服务应用，用来连接配置服务器并为客户端提供获取配置信息，加密/解密信息等访问接口。
+
+客户端则是通过指定的配置中心来管理应用资源，以及与业务相关的配置内容，并在启动的时候从配置中心获取和加载配置信息，配置服务器默认采用git来存储配置信息，这样就有助于对环境配置进行版本管理，并且可以通过git客户端工具来方便的管理和访问配置内容。
+
+### （3）能干嘛
+
+- 集中管理配置文件；
+- 不同环境不同配置，动态化的配置更新，分环境部署比如dev/test/prod/beta/release；
+- 运行期间动态调整配置，不再需要在每个服务部署的机器上编写配置文件，服务会向配置中心统一拉取配置自己的信息；
+- 当配置发生变动时，服务不需要重启即可感知到配置的变化并应用新的配置；
+- 将配置信息以REST接口的形式暴露。
+
+### （4）与GitHub整合配置
+
+![img](img/1d5845a5-0c27-4221-a9a3-6319ac667235.png)
+
+### （5）官网
+
+https://cloud.spring.io/spring-cloud-static/spring-cloud-config/2.2.2.RELEASE/reference/html/
+
+## 2、Config服务端配置与测试
+
+### （1）配置Git仓库
+
+**这里必须使用Git仓库来管理配置文件**：
+
+Git仓库地址：https://github.com/wangliu1102/microservicecloud-config
+
+![img](img/5cb36982-0981-4d09-b9bd-916a23726296.png)
+
+### （2）新建cloud-config-center-3344
+
+### （3）修改pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-config-center-3344</artifactId>
+    <dependencies>
+        <!--配置中心-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-config-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （4）新建application.yml
+
+```yaml
+server:
+  port: 3344
+spring:
+  application:
+    name: cloud-config-center
+  # 配置中心
+  cloud:
+    config:
+      server:
+        git:
+#          uri: git@github.com:wangliu1102/microservicecloud-config.git
+#          search-paths:
+#            - microservicecloud-config/cloud2020
+          uri: https://github.com/wangliu1102/microservicecloud-config
+          search-paths: /cloud2020 #git仓库地址下的相对地址 多个用逗号","分割
+#          force-pull: true #强制拉入Git存储库
+          # 访问git仓库的用户密码 如果Git仓库为公开仓库，可以不填写用户名和密码，如果是私有仓库需要填写
+#          username: ******
+#          password: ******
+          ### 读取分支
+      label: master
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+```
+
+### （5）新建主启动类ConfigCenterMain3344
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.config.server.EnableConfigServer;
+/**
+ * @author 王柳
+ * @date 2020/4/17 9:14
+ */
+@SpringBootApplication
+@EnableConfigServer
+public class ConfigCenterMain3344 {
+    public static void main(String[] args) {
+        SpringApplication.run(ConfigCenterMain3344.class, args);
+    }
+}
+```
+
+### （6）windows下修改hosts文件，增加映射
+
+```
+127.0.0.1 config-3344.com
+```
+
+### （7）测试
+
+http://config-3344.com:3344/master/config-dev.yml
+
+![img](img/24da1252-3abc-47e5-aece-0ae6d8e3cd1c.png)
+
+### （8）配置读取规则
+
+![img](img/354c8564-4ffd-42e6-b5ee-6ae25a8f231f.jpg)
+
+```
+/{application}-{profile}.yml
+http://config-3344.com:3344/application-dev.yml
+http://config-3344.com:3344/application-test.yml
+http://config-3344.com:3344/application-xxx.yml(不存在的配置)
+/{application}/{profile}[/{label}]
+http://config-3344.com:3344/application/dev/master
+http://config-3344.com:3344/application/test/master
+http://config-3344.com:3344/application/xxx/master
+/{label}/{application}-{profile}.yml
+http://config-3344.com:3344/master/application-dev.yml
+http://config-3344.com:3344/master/application-test.yml
+http://config-3344.com:3344/master/application-xxx.yml
+```
+
+![img](img/0a400b59-81a1-486c-8aa9-b0a153478a5e.jpg)
+
+## 3、Config客户端配置与测试
+
+### （1）新建cloud-config-client-3355
+
+### （2）修改pom.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-config-client-3355</artifactId>
+    <dependencies>
+        <!--配置中心客户端-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建bootstrap.yml
+
+```yaml
+server:
+  port: 3355
+spring:
+  application:
+    name: config-client
+  # 配置中心
+  cloud:
+    config:
+      fail-fast: true  #是否启动快速失败功能，功能开启则优先判断config server是否正常
+      name: config # 配置文件名称
+      profile: ${spring.profiles.active} #读取后缀名称
+#      discovery: #配置服务发现
+#        enabled: true #是否启动服务发现
+#        service-id: cloud-config-center #服务发现(eureka)中，配置中心(config server)的服务名
+      uri: http://localhost:3344 # 配置中心地址，不用这个可以使用上面的服务名配置服务发现
+      label: master #获取配置文件的分支，默认是master。如果是是本地获取的话，则无用
+  profiles:
+    active: dev
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+```
+
+### 
+
+#### application.yml和bootstrap.yml
+
+> > ![img](img/37686f97-1d42-47da-b393-6253b5386a4a.jpg)
+
+### （4）新建主启动类
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+/**
+ * @author 王柳
+ * @date 2020/4/17 9:14
+ */
+@SpringBootApplication
+@EnableEurekaClient
+public class ConfigCientMain3355 {
+    public static void main(String[] args) {
+        SpringApplication.run(ConfigCientMain3355.class, args);
+    }
+}
+```
+
+### （5）新建业务类
+
+```java
+package com.atguigu.springcloud.controller;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+/**
+ * @author 王柳
+ * @date 2020/4/17 9:47
+ */
+@RestController
+public class ConfigClientController {
+    @Value("${config.info}")
+    private String configInfo;
+    @GetMapping("/configInfo")
+    public String getConfigInfo() {
+        return configInfo;
+    }
+}
+```
+
+### （6）测试
+
+http://localhost:3355/configInfo
+
+![img](img/d0882984-922f-4ec9-8305-77bfe06ae0c7.png)
+
+## 4、Config客户端之动态刷新
+
+![img](img/e47d11a7-dd46-497e-9287-31e71fe62b77.png)
+
+### （1）修改3355模块的pom.xml文件，引入actuator
+
+```xml
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+```
+
+### （2）修改3355模块的YML文件，暴露监控端点
+
+```yaml
+# 暴露监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+### （3）@RefreshScope业务类Controller修改
+
+```java
+@RestController
+@RefreshScope
+public class ConfigClientController {
+    ...
+}
+```
+
+### （4）修改配置后，发送Post请求刷新配置 
+
+修改3344在GitHub上的config-dev配置，version改为2
+
+```yaml
+config:
+  info: master branch,springcloud-config/config-prod.yml,version=2
+```
+
+发送Post请求刷新：http://localhost:3355/actuator/refresh
+
+![img](img/24685e77-1784-43f8-89af-f11f6f9a7d5c.png)
+
+### （5）测试
+
+http://localhost:3355/configInfo
+
+![img](img/ac1d765e-9397-45e2-ac0f-1ce09c3183df.png)
+
+![img](img/40c4253c-76e4-4fe7-8917-708f044504c7.png)
 
 # 十四、SpringCloud Bus 消息总线
 
