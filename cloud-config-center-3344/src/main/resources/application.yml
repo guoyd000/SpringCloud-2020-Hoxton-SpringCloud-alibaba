@@ -19,7 +19,24 @@ spring:
 #          password: ******
           ### 读取分支
       label: master
+    bus:
+      enabled: true #是否启用springcloud config bus
+      trace:
+        enabled: true # 开启跟踪总线事件
+    #rabbitmq配置
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
 eureka:
   client:
     service-url:
       defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+
+### rabbitmq相关配置，暴露bus刷新配置的端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'

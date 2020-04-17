@@ -4952,7 +4952,285 @@ http://localhost:3355/configInfo
 
 # 十四、SpringCloud Bus 消息总线
 
- RabbitMQ/Kafka
+参考[SpringCloud实战学习](wiz://open_document?guid=a6a8e6ec-bf20-4a66-9d7b-4fbd37fb1d26&kbguid=&private_kbguid=9e15e816-792d-4528-9d21-a849cc4117d5)中的SpringCloud Bus章节。
+
+GitHub地址： [https://github.com/wangliu1102/SpringCloudStudy-Practical](https://github.com/wangliu1102/SpringCloudStudy-Practical.git)
+
+## 1、概述
+
+### （1）是什么
+
+Spring Cloud Bus 支持两种消息代理：**RabbitMQ和Kafka**。
+
+![img](img/663bdb0e-24ba-47d0-bb1a-4a8ba38d455e.jpg)
+
+### （2）能干嘛
+
+![img](img/f9e48b63-8810-4930-a56f-a8cb309dd634.jpg)
+
+### （3）为何被称为总线
+
+![img](img/e9a70c04-4292-4dc1-957a-b7eecd7867b9.jpg)
+
+## 2、RabbitMQ环境配置
+
+笔记-》RabbitMQ 的安装教程：[RabbitMQ的环境安装及配置(Windows)](wiz://open_document?guid=bf8960fb-e5b7-4ad4-9888-f6655824caa9&kbguid=&private_kbguid=9e15e816-792d-4528-9d21-a849cc4117d5)。
+
+GitHub-》[https://github.com/wangliu1102/SpringCloudStudy-Practical/blob/master/RabbitMQ%E7%9A%84%E7%8E%AF%E5%A2%83%E5%AE%89%E8%A3%85%E5%8F%8A%E9%85%8D%E7%BD%AE(Windows).md](https://github.com/wangliu1102/SpringCloudStudy-Practical/blob/master/RabbitMQ的环境安装及配置(Windows).md)
+
+## 3、SpringCloud Bus动态刷新全局广播
+
+### （1）设计思想
+
+#### ① 利用消息总线触发一个客户端/bus/refresh,而刷新所有客户端的配置
+
+![img](img/5c22e4d2-9636-48d3-9acf-8bf5c9235085.jpg)
+
+![img](img/89582a3d-b525-41f3-84bf-924dd9cd29bb.jpg)
+
+#### ② 利用消息总线触发一个服务端ConfigServer的/bus/refresh端点,而刷新所有客户端的配置
+
+![img](img/d7c907cd-8663-4d64-a878-49af4252edb0.jpg)
+
+![img](img/e8061149-9d52-424f-a7bc-d6d97ae70ef2.jpg)
+
+#### ③ 第二种架构显然更适合，第一种不适合原因如下
+
+![img](img/33f50683-354e-40cf-8e3d-61cf2622508d.png)
+
+### （2）以3355位模板，新建3366
+
+业务类Controller如下：
+
+```java
+@RestController
+@RefreshScope
+public class ConfigClientController {
+    @Value("${config.info}")
+    private String configInfo;
+    @Value("${server.port}")
+    private String serverPort;
+    @GetMapping("/configInfo")
+    public String getConfigInfo() {
+        return "serverPort: " + serverPort + "\t\n\n configInfo: " + configInfo;
+    }
+}
+```
+
+### （3）cloud-config-center-3344配置中心服务端添加消息总线支持
+
+修改POM，添加如下：
+
+```xml
+    <!--添加消息总线RabbitMQ支持-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+    </dependency>
+```
+
+修改YML：
+
+```yaml
+server:
+  port: 3344
+spring:
+  application:
+    name: cloud-config-center
+  # 配置中心
+  cloud:
+    config:
+      server:
+        git:
+#          uri: git@github.com:wangliu1102/microservicecloud-config.git
+#          search-paths:
+#            - microservicecloud-config/cloud2020
+          uri: https://github.com/wangliu1102/microservicecloud-config
+          search-paths: /cloud2020 #git仓库地址下的相对地址 多个用逗号","分割
+#          force-pull: true #强制拉入Git存储库
+          # 访问git仓库的用户密码 如果Git仓库为公开仓库，可以不填写用户名和密码，如果是私有仓库需要填写
+#          username: ******
+#          password: ******
+          ### 读取分支
+      label: master
+    bus:
+      enabled: true #是否启用springcloud config bus
+      trace:
+        enabled: true # 开启跟踪总线事件
+    #rabbitmq配置
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+### rabbitmq相关配置，暴露bus刷新配置的端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+### （4）cloud-config-client-3355配置中心客户端添加消息总线支持
+
+修改POM，添加如下：
+
+```xml
+    <!--添加消息总线RabbitMQ支持-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+    </dependency>
+```
+
+修改YML：
+
+```yaml
+server:
+  port: 3355
+spring:
+  application:
+    name: config-client
+  # 配置中心
+  cloud:
+    config:
+      fail-fast: true  #是否启动快速失败功能，功能开启则优先判断config server是否正常
+      name: config # 配置文件名称
+      profile: ${spring.profiles.active} #读取后缀名称
+#      discovery: #配置服务发现
+#        enabled: true #是否启动服务发现
+#        service-id: cloud-config-center #服务发现(eureka)中，配置中心(config server)的服务名
+      uri: http://localhost:3344 # 配置中心地址，不用这个可以使用上面的服务名配置服务发现
+      label: master #获取配置文件的分支，默认是master。如果是是本地获取的话，则无用
+  profiles:
+    active: dev
+    #rabbitmq配置
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+# 暴露监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+### （5）cloud-config-client-3366配置中心客户端添加消息总线支持
+
+修改POM，添加如下：
+
+```xml
+    <!--添加消息总线RabbitMQ支持-->
+    <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-starter-bus-amqp</artifactId>
+    </dependency>
+```
+
+修改YML：
+
+```yaml
+server:
+  port: 3366
+spring:
+  application:
+    name: config-client
+  # 配置中心
+  cloud:
+    config:
+      fail-fast: true  #是否启动快速失败功能，功能开启则优先判断config server是否正常
+      name: config # 配置文件名称
+      profile: ${spring.profiles.active} #读取后缀名称
+#      discovery: #配置服务发现
+#        enabled: true #是否启动服务发现
+#        service-id: cloud-config-center #服务发现(eureka)中，配置中心(config server)的服务名
+      uri: http://localhost:3344 # 配置中心地址，不用这个可以使用上面的服务名配置服务发现
+      label: master #获取配置文件的分支，默认是master。如果是是本地获取的话，则无用
+  profiles:
+    active: dev
+    #rabbitmq配置
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+# 暴露监控端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+### （6）测试
+
+修改GitHub配置中心上的的config-dev配置，version改为5。
+
+发送Post如下请求：http://localhost:3344/actuator/bus-refresh
+
+![img](img/2d562697-ff84-45eb-a833-49f2663a445f.jpg)
+
+http://localhost:3355/configInfo
+
+http://localhost:3366/configInfo
+
+![img](img/551f0069-ef7d-480b-9b92-a3ca2881699a.png)
+
+## 4、SpringCloud Bus动态刷新定点通知
+
+![img](img/9aa1e0e0-e049-4bf9-9b38-bbe6442f88b3.png)
+
+修改GitHub配置中心上的的config-dev配置，version改为10。
+
+这里我们只通知3355，不通知3366。microservicecloud-config-atguigu-dev是服务名，因为GitHub上的配置中心有个application-dev.yml，配置了应用名为microservicecloud-config-atguigu-dev。
+
+发送Post如下请求：http://localhost:3344/actuator/bus-refresh/microservicecloud-config-atguigu-dev:3355
+
+![img](img/4c9b8bef-6415-4d71-82b3-3c1af437dc91.png)
+
+## 5、总结
+
+![img](img/04920e5b-cc12-4d51-8488-d1a23d32bf59.jpg)
+
+## 6、刷新Druid数据源
+
+如果数据源采用的是Druid，目前更新 GitHub 中的数据源配置，只有重启服务才能获取新配置，不然获取不到。
+
+### （1）自定义Druid配置类
+
+```java
+//一定不要在此类加@RefreshScope，不然报错
+@Configuration //不要少了
+public class DruidConfig {
+  @RefreshScope //刷新数据源
+  @ConfigurationProperties(prefix = "spring.datasource") //绑定数据源配置
+  @Bean
+  public DataSource druid() {
+    return new DruidDataSource();
+ }
+}
+```
+
+### （2）测试
+
+更新GitHub上的数据库名，发送post请求刷新后，服务器不用重启，新的数据源就会生效。
+
+
 
 # 十五、SpringCloud Stream 消息驱动
 
