@@ -5234,7 +5234,528 @@ public class DruidConfig {
 
 # 十五、SpringCloud Stream 消息驱动
 
+## 1、消息驱动概述
 
+### （1）是什么
+
+![img](img/31ecaa4a-763a-4979-928a-f2af5142a11c.png)
+
+![img](img/06d799b7-bc4a-4ad2-b1c0-46aec0c066ab.jpg)
+
+### （2）设计思想
+
+#### ① 标准MQ
+
+![img](img/80dc6125-998f-4c70-8893-1ef0b2f956b7.jpg)
+
+![img](img/c9e7d3cd-7954-45bc-a9f8-f98bfb288c44.png)
+
+![img](img/dffa53ec-f3a7-48e9-b2ac-bc78d0d80d10.png)
+
+#### ② 为什么用CLoud Stream
+
+![img](img/38cdc073-a65e-4a3e-9963-9d7a2834b2e5.jpg)
+
+![img](img/1e18f9b6-30af-4aa7-b885-4f9bbb828ae2.jpg)
+
+#### Stream凭什么可以统一底层差异
+
+![img](img/678dd4b9-4965-4bb3-bb62-9cecad7d1011.jpg)
+
+#### Binder
+
+![img](img/4200c860-9cf3-4621-b783-3b2e5e0d1f55.png)
+
+![img](img/3667b992-9202-40ac-8514-7f50cbbd06c9.jpg)
+
+![img](img/5b6fbd13-9bef-47f1-b603-f625d03e4d7f.jpg)
+
+#### ③ Stream中的消息通信方式遵循了发布-订阅模式
+
+![img](img/68bf0e40-8315-4dd3-a55b-9c7e85cffc4d.png)
+
+### （3）SpringCloud Stream标准流程套路
+
+![img](img/61b54533-4959-4c12-95b5-b93be8692557.jpg)
+
+![img](img/3eb1f082-e54e-4c00-9f1d-3c777e075f3c.png)
+
+#### ① Binder绑定器
+
+![img](img/23b8570e-5de1-4d7a-9920-74510fdbe9b6.png)
+
+#### ② Channel消息通道
+
+通道：![img](img/9addbe9a-eeeb-4a74-9bf3-b7db782930ff.png)
+
+#### ③ Source和Sink
+
+![img](img/3f950457-6d7e-4165-8191-637ef0282b7a.png)
+
+### （4）编码API和常用注解
+
+![img](img/e4a4c201-8f46-43d1-b052-6caf8f3dd8a8.jpg)
+
+## 2、案例说明
+
+首先，安装配置RabbitMQ。
+
+![img](img/1ab79290-035b-42d1-b392-d3bdea3f139b.png)
+
+## 3、消息驱动之生产者
+
+### （1）新建cloud-stream-rabbitmq-provider8801
+
+### （2）修改POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-stream-rabbitmq-provider8801</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-rabbit</artifactId> 
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建application.yml
+
+```yaml
+server:
+  port: 8801
+spring:
+  application:
+    name: cloud-stream-provider
+  cloud:
+    stream:
+      binders: # 在此处配置要绑定的rabbitmq的服务信息
+        defaultRabbit:  # 表示定义的名称，用于binding整合
+          type: rabbit # 消息组件类型
+          enviroment: #设置rabbitmq的相关环境配置
+            spring:
+              rabbitmq:
+                host: localhost
+                port: 5672
+                username: guest
+                password: guest
+      bindings: # 服务的整合处理
+        output: # 这个名字是一个通道的名称
+          destination: studyExchange #表示要使用的Exchange名称定义
+          content-type: application/json  # 设置消息类型，本次为json，文本则设置“text/plain”
+          binder: defaultRabbit #设置要绑定的消息服务的具体设置
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+  instance:
+    lease-renewal-interval-in-seconds: 2 #设置心跳的时间间隔（默认是30秒）
+    lease-expiration-duration-in-seconds: 5 # Eureka服务端在收到最后一次心跳后等待时间上限，单位为秒（默认是90秒），超时将剔除服务
+    instance-id: send-8801.com # 在信息列表中显示主机名称
+    prefer-ip-address: true # 访问的路径变为IP地址
+```
+
+### （4）新建主启动类StreamMqMain8801
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.netflix.eureka.EnableEurekaClient;
+/**
+ * @author 王柳
+ * @date 2020/4/17 9:14
+ */
+@SpringBootApplication
+public class StreamMqMain8801 {
+    public static void main(String[] args) {
+        SpringApplication.run(StreamMqMain8801.class, args);
+    }
+}
+```
+
+### （5）业务类
+
+#### ① 发送消息接口
+
+```java
+package com.atguigu.springcloud.service;
+/**
+ * @author 王柳
+ * @date 2020/4/17 16:18
+ */
+public interface IMessageProvider {
+    String send();
+}
+```
+
+#### **② 发送消息接口实现**
+
+```java
+package com.atguigu.springcloud.service.impl;
+import com.atguigu.springcloud.service.IMessageProvider;
+import org.springframework.cloud.stream.annotation.EnableBinding;
+import org.springframework.cloud.stream.messaging.Source;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.support.MessageBuilder;
+import javax.annotation.Resource;
+import java.util.UUID;
+/**
+ * @author 王柳
+ * @date 2020/4/17 16:18
+ */
+@EnableBinding(Source.class) // 定义消息的推送管道
+public class MessageProviderImpl implements IMessageProvider {
+    /**
+     * 消息发送管道
+     */
+    @Resource
+    private MessageChannel output;
+    @Override
+    public String send() {
+        String serial = UUID.randomUUID().toString();
+        output.send(MessageBuilder.withPayload(serial).build());
+        System.out.println("********serial: " + serial);
+        return serial;
+    }
+}
+```
+
+#### ③ Controller 
+
+```java
+package com.atguigu.springcloud.controller;
+import com.atguigu.springcloud.service.IMessageProvider;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+import javax.annotation.Resource;
+/**
+ * @author 王柳
+ * @date 2020/4/17 16:24
+ */
+@RestController
+public class SendMessageController {
+    @Resource
+    private IMessageProvider messageProvider;
+    @GetMapping("/sendMessage")
+    public String sendMessage() {
+        return messageProvider.send();
+    }
+}
+```
+
+### （6）测试
+
+![img](img/520ce284-ba0f-4e69-a9c9-592db04247ef.png)
+
+![img](img/2260fe24-5449-4698-89d5-982aacc7c029.png)
+
+![img](img/4ef39376-af8d-49bd-8a91-a6b4ae70e3a9.png)
+
+## 4、消息驱动之消费者
+
+### （1）新建cloud-stream-rabbitmq-consumer8802
+
+### （2）修改POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-stream-rabbitmq-consumer8802</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-stream-rabbit</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+### （3）新建application.yml
+
+```yaml
+server:
+  port: 8802
+spring:
+  application:
+    name: cloud-stream-consumer
+  cloud:
+    stream:
+      binders: # 在此处配置要绑定的rabbitmq的服务信息
+        defaultRabbit:  # 表示定义的名称，用于binding整合
+          type: rabbit # 消息组件类型
+          enviroment: #设置rabbitmq的相关环境配置
+            spring:
+              rabbitmq:
+                host: localhost
+                port: 5672
+                username: guest
+                password: guest
+      bindings: # 服务的整合处理
+        input: # 这个名字是一个通道的名称
+          destination: studyExchange #表示要使用的Exchange名称定义
+          content-type: application/json  # 设置消息类型，本次为json，文本则设置“text/plain”
+          binder: defaultRabbit #设置要绑定的消息服务的具体设置
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+  instance:
+    lease-renewal-interval-in-seconds: 2 #设置心跳的时间间隔（默认是30秒）
+    lease-expiration-duration-in-seconds: 5 # Eureka服务端在收到最后一次心跳后等待时间上限，单位为秒（默认是90秒），超时将剔除服务
+    instance-id: receive-8802.com # 在信息列表中显示主机名称
+    prefer-ip-address: true # 访问的路径变为IP地址
+```
+
+### （4）新建主启动类
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+/**
+ * @author 王柳
+ * @date 2020/4/17 9:14
+ */
+@SpringBootApplication
+public class StreamMqMain8802 {
+    public static void main(String[] args) {
+        SpringApplication.run(StreamMqMain8802.class, args);
+    }
+}
+```
+
+### （5）业务类
+
+```java
+package com.atguigu.springcloud.controller;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.stream.annotation.EnableBinding;
+import org.springframework.cloud.stream.annotation.StreamListener;
+import org.springframework.cloud.stream.messaging.Sink;
+import org.springframework.messaging.Message;
+import org.springframework.stereotype.Component;
+/**
+ * @author 王柳
+ * @date 2020/4/17 16:24
+ */
+@Component
+@EnableBinding(Sink.class)
+public class ReceiveMessageListenerController {
+    @Value("${server.port}")
+    private String serverPort;
+    @StreamListener(Sink.INPUT)
+    public void input(Message<String> message) {
+        System.out.println("消费者1号，---->接收到的消息： " + message.getPayload() + "\t port: " + serverPort);
+    }
+}
+```
+
+### （6）测试
+
+测试8801发送8802接收消息
+
+http://localhost:8801/sendMessage
+
+![img](img/34818ecb-1796-4398-b08c-892399c7b8bb.png)
+
+![img](img/a50a9bf7-688b-485f-a89c-19c32170d4b4.png)
+
+## 5、分组消费与持久化
+
+### （1）依照8002，新建8003，并启动
+
+### （2）运行后有两个问题
+
+​      ![img](img/b2d035d8-c0d8-44d3-a5bd-0599a279f17b.png)
+
+### （3）消费
+
+#### ① 重复消费问题
+
+![img](img/17f565ca-3118-497b-a19b-d040e900602e.png)
+
+#### ② 如何解决
+
+![img](img/7dfb7709-d9d1-432f-aff3-32d48c9f911f.jpg)
+
+#### 
+
+#### ③ 生产实际案例
+
+![img](img/322328c3-65d1-4f61-94ee-2279dca451f6.jpg)
+
+![img](img/d084677d-61aa-4321-8386-076c8cfcd0e2.jpg)
+
+### （4）分组
+
+![img](img/c960e291-fd56-4e6e-8d24-3ad270fd4315.jpg)
+
+#### ① 原理
+
+![img](img/03d475b3-22cd-4fed-8a60-df7ea6ddfd62.png)
+
+#### ② 8802、8803设置为不同组，group两个不同
+
+8002修改YML，设置group为atguiguA：
+
+```yaml
+server:
+  port: 8802
+spring:
+  application:
+    name: cloud-stream-consumer
+  cloud:
+    stream:
+      binders: # 在此处配置要绑定的rabbitmq的服务信息
+        defaultRabbit:  # 表示定义的名称，用于binding整合
+          type: rabbit # 消息组件类型
+          enviroment: #设置rabbitmq的相关环境配置
+            spring:
+              rabbitmq:
+                host: localhost
+                port: 5672
+                username: guest
+                password: guest
+      bindings: # 服务的整合处理
+        input: # 这个名字是一个通道的名称
+          destination: studyExchange #表示要使用的Exchange名称定义
+          content-type: application/json  # 设置消息类型，本次为json，文本则设置“text/plain”
+          binder: defaultRabbit #设置要绑定的消息服务的具体设置
+          group: atguiguA
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+  instance:
+    lease-renewal-interval-in-seconds: 2 #设置心跳的时间间隔（默认是30秒）
+    lease-expiration-duration-in-seconds: 5 # Eureka服务端在收到最后一次心跳后等待时间上限，单位为秒（默认是90秒），超时将剔除服务
+    instance-id: receive-8802.com # 在信息列表中显示主机名称
+    prefer-ip-address: true # 访问的路径变为IP地址
+```
+
+8003修改YML，设置group为atguiguB：
+
+```yaml
+server:
+  port: 8803
+spring:
+  application:
+    name: cloud-stream-consumer
+  cloud:
+    stream:
+      binders: # 在此处配置要绑定的rabbitmq的服务信息
+        defaultRabbit:  # 表示定义的名称，用于binding整合
+          type: rabbit # 消息组件类型
+          enviroment: #设置rabbitmq的相关环境配置
+            spring:
+              rabbitmq:
+                host: localhost
+                port: 5672
+                username: guest
+                password: guest
+      bindings: # 服务的整合处理
+        input: # 这个名字是一个通道的名称
+          destination: studyExchange #表示要使用的Exchange名称定义
+          content-type: application/json  # 设置消息类型，本次为json，文本则设置“text/plain”
+          binder: defaultRabbit #设置要绑定的消息服务的具体设置
+          group: atguiguB
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka7001.com:7001/eureka,http://eureka7002.com:7002/eureka
+  instance:
+    lease-renewal-interval-in-seconds: 2 #设置心跳的时间间隔（默认是30秒）
+    lease-expiration-duration-in-seconds: 5 # Eureka服务端在收到最后一次心跳后等待时间上限，单位为秒（默认是90秒），超时将剔除服务
+    instance-id: receive-8803.com # 在信息列表中显示主机名称
+    prefer-ip-address: true # 访问的路径变为IP地址
+```
+
+![img](img/e4184419-3467-434c-a98a-d95cebf6bee4.jpg)
+
+#### ③ 8802、8803设置为相同组，group两个相同
+
+![img](img/0fa708b3-78bc-49cb-8533-fb4ec5afbf9b.png)
+
+8802、8803都设置group为atguiguA
+
+### （5）持久化
+
+![img](img/0f0b57eb-6ee7-4356-bf33-3b6e8e21b1af.jpg)
 
 # 十六、SpringCloud Sleuth分布式请求链路跟踪
 
