@@ -5906,7 +5906,45 @@ spring:
 
 # 十七、SpringCloud Alibaba入门简介
 
+## 1、为什么会出现SpringCloud Alibaba
 
+![img](img/28e25672-43f3-4650-b6be-20fa252d417c.png)
+
+## 2、SpringCloud Alibaba带来了什么
+
+### （1）是什么
+
+![img](img/41ffa632-4a45-4e77-ba97-f9107e517654.jpg)
+
+### （2）能干嘛
+
+![img](img/9fa9037e-938f-44d7-90b5-7f055dd6dddf.jpg)
+
+### （3）在哪下
+
+https://github.com/alibaba/spring-cloud-alibaba/blob/master/README-zh.md
+
+### （4）怎么玩
+
+![img](img/100f9393-e15b-4cdf-95f0-48214c5bc59c.jpg)
+
+## 3、SpringCloud Alibaba学习资料获取
+
+### （1）官网
+
+https://spring.io/projects/spring-cloud-alibaba#overview
+
+![img](img/e164b9f4-a349-450f-9165-10838f7519f4.jpg)
+
+### （2）英文
+
+https://github.com/alibaba/spring-cloud-alibaba
+
+https://spring-cloud-alibaba-group.github.io/github-pages/greenwich/spring-cloud-alibaba.html
+
+### （3）中文
+
+https://github.com/alibaba/spring-cloud-alibaba/blob/master/README-zh.md
 
 # 十八、SpringCloud Alibaba Nacos服务注册和配置中心
 
