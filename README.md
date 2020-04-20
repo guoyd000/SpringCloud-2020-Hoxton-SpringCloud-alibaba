@@ -5759,7 +5759,150 @@ eureka:
 
 # 十六、SpringCloud Sleuth分布式请求链路跟踪
 
+## 1、概述
 
+### （1）为什么出现这个技术
+
+![img](img/65e6d1f6-c36a-4bc5-84fa-9409598f5c9b.jpg)
+
+### （2）是什么
+
+![img](img/05ce0fdf-f4d5-4906-a8a6-9f732cdf0867.png)
+
+### （3）解决
+
+![img](img/8b3488cb-1f58-4f00-9d4b-070ec9463456.jpg)
+
+## 2、搭建链路监控步骤
+
+### （1）zipkin
+
+#### ① 下载
+
+https://dl.bintray.com/openzipkin/maven/io/zipkin/java/zipkin-server/
+
+![img](img/190d9ed3-f6f0-4418-9b12-de81b9dabe3f.png)
+
+#### ② 运行jar
+
+![img](img/b0362df3-d158-4c60-b216-764e945cc52c.jpg)
+
+#### **③ 运行控制台**
+
+http://localhost:9411/zipkin/
+
+- ##### 完整的调用链路
+
+- ![img](img/60c623c1-6341-42d2-980f-c81634a9e385.jpg)
+
+- ##### 上图简化
+
+![img](img/33453498-c4f2-43c5-947d-2d25e933aa2d.jpg)
+
+- ##### 名词解释
+
+![img](img/cc7a4f3f-72a7-4d29-a2d1-a7884347c25a.png)
+
+### （2）服务提供者
+
+#### ① 修改cloud-provider-payment8001
+
+#### ② 修改POM
+
+添加如下：
+
+```xml
+        <!--   包含了sleuth + zipkin     -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-zipkin</artifactId>
+        </dependency>
+```
+
+#### ③ 修改application.yml
+
+添加如下：
+
+```yaml
+spring:
+  application:
+    name: cloud-payment-service
+  zipkin:
+    base-url: http://localhost:9411
+  sleuth:
+    sampler:
+      # 采样率值介于0到1之间，1则表示全部采集
+      probability: 1
+```
+
+#### ④ 修改业务Controller
+
+添加如下：
+
+```java
+    @GetMapping("/payment/zipkin")
+    public String paymentZipkin() {
+        return "Hi,I'am paymentZipkin server fall back,welcome to atguigu,O(∩_∩)O哈哈~";
+    }
+```
+
+### （3）服务消费者(调用方)
+
+#### ① 修改cloud-consumer-order80
+
+#### ② 修改POM
+
+添加如下：
+
+```xml
+        <!--   包含了sleuth + zipkin     -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-zipkin</artifactId>
+        </dependency>
+```
+
+#### ③ 修改application.yml
+
+添加如下：
+
+```yaml
+spring:
+  application:
+    name: cloud-order-service
+  zipkin:
+    base-url: http://localhost:9411
+  sleuth:
+    sampler:
+      # 采样率值介于0到1之间，1则表示全部采集
+      probability: 1
+```
+
+#### ④ 修改业务Controller
+
+添加如下：
+
+```java
+    @GetMapping("/consumer/payment/zipkin")
+    public String paymentZipkin() {
+        String result = restTemplate.getForObject(PAYMENT_URL + "/payment/zipkin", String.class);
+        return result;
+    }
+```
+
+**（4）测试**
+
+依次启动7001、7002、8001、80。
+
+80调用8001几次测试下。
+
+打开浏览器访问：http://localhost:9411/zipkin/
+
+![img](img/4f35b426-c7bb-49e0-9abd-fe20bc6fe32c.jpg)
+
+![img](img/946bab4a-f0d9-4ab0-8114-7d6e36f9c09d.jpg)
+
+![img](img/2922a5d8-ca87-4a52-810e-0b09cda56b93.png)
 
 # 十七、SpringCloud Alibaba入门简介
 
