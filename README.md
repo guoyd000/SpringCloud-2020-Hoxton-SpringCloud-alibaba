@@ -5791,15 +5791,17 @@ https://dl.bintray.com/openzipkin/maven/io/zipkin/java/zipkin-server/
 
 http://localhost:9411/zipkin/
 
-- ##### 完整的调用链路
+##### 完整的调用链路
 
-- ![img](img/60c623c1-6341-42d2-980f-c81634a9e385.jpg)
+![img](img/60c623c1-6341-42d2-980f-c81634a9e385.jpg)
 
-- ##### 上图简化
+
+
+##### 上图简化
 
 ![img](img/33453498-c4f2-43c5-947d-2d25e933aa2d.jpg)
 
-- ##### 名词解释
+##### 名词解释
 
 ![img](img/cc7a4f3f-72a7-4d29-a2d1-a7884347c25a.png)
 
@@ -5948,7 +5950,704 @@ https://github.com/alibaba/spring-cloud-alibaba/blob/master/README-zh.md
 
 # 十八、SpringCloud Alibaba Nacos服务注册和配置中心
 
+## 1、Nacos简介
 
+### （1）为什么叫Nacos
+
+![img](img/4d7fcbfa-4c65-437a-ab02-73114f321c84.png)
+
+### （2）是什么
+
+![img](img/df3948de-eb18-4ff6-94ee-bec8c791dac1.png)
+
+### （3）能干嘛
+
+![img](img/44c43211-00e6-4f1c-8020-9243b1b34b25.png)
+
+### （5）去哪下
+
+https://github.com/alibaba/nacos
+
+官网文档：
+
+https://nacos.io/zh-cn/
+
+https://spring-cloud-alibaba-group.github.io/github-pages/greenwich/spring-cloud-alibaba.html
+
+### （6）各个注册中心比较
+
+![img](img/8372de63-a543-403c-ade9-a2dc712fde41.jpg)
+
+## 2、安装并运行Nacos
+
+![img](img/3c3b0801-f301-4fe9-825d-b7dfe6043ba1.png)
+
+**默认账号密码都是nacos**
+
+![img](img/c8e55ac9-87fb-4e1a-a6ae-5904b40e038d.jpg)
+
+## 3、Nacos作为服务注册中心演示
+
+### （1）基于Nacos的服务提供者
+
+#### ① 新建cloudalibaba-provider-payment9001
+
+#### ② 修改POM
+
+父POM：
+
+```xml
+<dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>Hoxton.SR1</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>2.1.0.RELEASE</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+```
+
+本模块POM：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloudalibaba-provider-payment9001</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+#### ③ 新建application.yml
+
+```yaml
+server:
+  port: 9001
+spring:
+  application:
+    name: nacos-payment-provider
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 # 配置Nacos地址
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+```
+
+#### ④ 新建主启动类
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:47
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+public class PaymentMain9001 {
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain9001.class,args);
+    }
+}
+```
+
+#### ⑤ 新建业务类
+
+```java
+package com.atguigu.springcloud.controller;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:48
+ */
+@RestController
+@Slf4j
+public class PaymentController {
+    @Value("${server.port}")
+    private String serverPort;
+    @GetMapping("/payment/nacos/{id}")
+    public String getPayment(@PathVariable("id") Integer id) {
+        return "nacos register,serverPort: " + serverPort + "\t id: " + id;
+    }
+}
+```
+
+#### ⑥ 测试
+
+![img](img/8339b086-cabb-46b2-beea-bd9e95b9ee99.png)
+
+![img](img/7fc71256-1f6a-42be-949d-92de43176138.jpg)
+
+#### ⑦ 参照9001新建9002
+
+### （2）基于Nacos的服务消费者
+
+#### ① 新建cloudalibaba-consumer-nacos-order83
+
+#### ② 修改POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloudalibaba-consumer-nacos-order83</artifactId>
+    
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+#### ③ 新建application.yml
+
+```yaml
+server:
+  port: 83
+spring:
+  application:
+    name: nacos-order-consumer
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 # 配置Nacos地址
+#消费者将要去访问的微服务名称（注册成功进nacos的微服务提供者）
+service-url:
+  nacos-user-service: http://nacos-payment-provider
+```
+
+#### ④ 新建主启动类
+
+```java
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:47
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+public class OrderMain83 {
+    public static void main(String[] args) {
+        SpringApplication.run(OrderMain83.class,args);
+    }
+}
+```
+
+#### ⑤ 新建业务类
+
+```java
+package com.atguigu.springcloud.config;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:11
+ */
+@Configuration
+public class ApplicationContextConfig {
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+ 
+
+```java
+package com.atguigu.springcloud.controller;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+import javax.annotation.Resource;
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:48
+ */
+@RestController
+@Slf4j
+public class OrderController {
+    @Resource
+    private RestTemplate restTemplate;
+    @Value("${service-url.nacos-user-service}")
+    private String serverURL;
+    @GetMapping("/consumer/payment/nacos/{id}")
+    public String paymentInfo(@PathVariable("id") Long id) {
+        return restTemplate.getForObject(serverURL + "/payment/nacos/" + id, String.class);
+    }
+}
+```
+
+#### ⑥ 测试
+
+http://localhost:83/consumer/payment/nacos/1
+
+#### ⑦ nacos支持负载均衡
+
+![img](img/74fc621a-f68c-46fe-a51f-bc3c789ce10a.jpg)
+
+### （3）服务注册中心对比
+
+#### ① Nacos全景图
+
+![img](img/6dc61b65-f7ec-4839-940b-86a4077be69e.jpg)
+
+![img](img/6607fe9a-ffb8-4c47-8754-375a5a64c904.jpg)
+
+#### ② Nacos和CAP
+
+![img](img/9295d34a-2b66-48bf-a248-2d0a83804106.jpg)
+
+![img](img/2383d2a8-5703-46bc-addf-2a88d6ce922f.jpg)
+
+#### ③ Nacos支持AP和CP模式的切换
+
+![img](img/3646374d-f315-4cb7-aeaf-ccb4f0d6d930.jpg)
+
+## 4、Nacos作为服务配置中心演示
+
+### （1）基础配置
+
+#### ① 新建cloudalibaba-config-nacos-client3377
+
+#### ② 修改POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloudalibaba-config-nacos-client3377</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+#### ③ 新建application.yml和bootstrap.yml
+
+##### 为什么配置两个
+
+![img](img/7f4d8652-1e70-48bf-a5d0-ccac7d5c125e.jpg)
+
+##### bootstrap.yml
+
+```yaml
+server:
+  port: 3377
+spring:
+  application:
+    name: nacos-config-client
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 # Nacos服务注册中心地址
+      config:
+        server-addr: localhost:8848 # Nacos作为配置中心地址
+        file-extension: yml # 指定yaml格式的配置
+# ${spring.application.name}-${spring.profile.active}.${spring.cloud.nacos.config.file-extension}
+```
+
+##### application.yml
+
+```yaml
+spring:
+  profiles:
+    active: dev #表示开发环境
+```
+
+#### ④ 新建主启动类
+
+```yaml
+package com.atguigu.springcloud;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:47
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+public class NacosConfigClientMain3377 {
+    public static void main(String[] args) {
+        SpringApplication.run(NacosConfigClientMain3377.class,args);
+    }
+}
+```
+
+#### ⑤ 新建业务类
+
+```java
+package com.atguigu.springcloud.controller;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.context.config.annotation.RefreshScope;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+/**
+ * @author 王柳
+ * @date 2020/4/21 14:22
+ */
+@RestController
+@RefreshScope // 支持Nacos的动态刷新功能
+public class ConfigClientController {
+    @Value("${config.info}")
+    private String configInfo;
+    @GetMapping("/config/info")
+    public String getConfigInfo() {
+        return configInfo;
+    }
+}
+```
+
+#### ⑥ 在nacos中添加配置信息：匹配规则
+
+##### 理论
+
+https://nacos.io/zh-cn/docs/quick-start-spring-cloud.html
+
+![img](img/91a1360c-8d20-49d9-8cfc-5c113483e66b.jpg)
+
+##### 实操
+
+![img](img/3529e46c-7281-4332-968a-b2af6cabfb67.jpg)
+
+![img](img/f654f22a-3325-439c-a940-7f4e6ff3c9f5.jpg)
+
+![img](img/f832b64c-dfae-46cc-98d2-da3d2591d6d3.png)
+
+![img](img/77a8092b-bf3a-44d8-914c-8ff29ffdadc7.jpg)
+
+#### ⑦ 测试
+
+http://localhost:3377/config/info
+
+![img](img/0e8294f2-6c3f-40d3-b1c6-b39ccdfaaa9e.png)
+
+#### ⑧ 自带动态刷新
+
+![img](img/d3e58a5a-bf97-4386-99c0-536891e1adf2.png)
+
+### （2）分类配置
+
+#### ① 问题：多环境多项目管理
+
+![img](img/0d524d74-53eb-4fa7-8287-c7af40778d37.jpg)
+
+#### ② Nacos的图形化管理界面
+
+![img](img/ef7dc003-fca2-45a9-84e3-821df307d298.jpg)
+
+![img](img/d11a5f1f-c232-4182-b6f8-99ea4b4d6279.jpg)
+
+#### ③ Namespace + Group + Data ID
+
+![img](img/a094e75a-fa94-4cfd-b59b-358c6bbf1751.jpg)
+
+![img](img/768486d4-164b-4d31-8605-6e118294bc44.jpg)
+
+![img](img/d023dfa4-4a0f-41f8-9ae3-db56ad1c78a7.jpg)
+
+#### ④三种配置方案
+
+##### DataID方案
+
+![img](img/4d1dfb1f-bdda-4d73-a0be-bcc6fda4973e.png)
+
+![img](img/66463d6d-1c28-4746-801e-69486032f602.png)
+
+![img](img/0241105c-3d07-4e77-9126-ff97ed55f4f9.jpg)
+
+![img](img/94cbab7c-2f06-4311-8c44-ab655f1e4d08.png)
+
+##### Group方案
+
+![img](img/019402e6-12fa-4913-8729-55c0e00d2065.png)
+
+![img](img/fa710efc-352c-4791-87d3-b548b2efe944.jpg)
+
+![img](img/edb00e4a-40e3-4ff2-bdc8-db4cbf3f5c2e.jpg)
+
+![img](img/ff4e6e94-baae-4443-bfae-4668ee8f275b.jpg)
+
+![img](img/d3dafdd2-94b1-458f-acde-c8d720a54170.jpg)
+
+![img](img/c4b51906-f119-4556-a8d8-509bce413e66.png)
+
+##### Namespace方案
+
+![img](img/a780d773-2880-4031-9ca9-39d8bf67b411.jpg)
+
+![img](img/55ac7b47-66c4-42d7-9e93-7d58af9fa3bb.jpg)
+
+![img](img/702723c7-27d5-4bd7-9234-3adc5af53d6b.jpg)
+
+![img](img/7fda7a84-4fba-4fcc-b8b9-fc603b1449cb.jpg)
+
+![img](img/fa9ea70e-54af-496b-aa24-6ddaf74e3b9f.jpg)
+
+![img](img/42e23a41-7608-4cca-8318-315cbd0687b0.png)
+
+## 5、Nacos集群和持久化配置(重要)
+
+### （1）官网说明
+
+https://nacos.io/zh-cn/docs/cluster-mode-quick-start.html
+
+![img](img/c6083a72-209f-4c9e-b4de-f87f92df242b.jpg)
+
+![img](img/d980aec4-dd40-4fe8-a11d-256e41ed9a40.png)
+
+![img](img/3615907d-4243-43c2-9354-709533132928.jpg)
+
+​    ![img](img/599beb38-5b6d-44c1-b359-ff2e201a0708.jpg)
+
+https://nacos.io/zh-cn/docs/deployment.html
+
+### （2）Nacos持久化配置解释
+
+#### ① Nacos默认自带的是嵌入式数据库derby
+
+https://github.com/alibaba/nacos/blob/develop/config/pom.xml
+
+#### ② derby到mysql切换配置步骤
+
+![img](img/8541a594-2954-4d16-8818-7bcbb55ef9e0.png)
+
+![img](img/1356eadd-e5ed-4e59-9fe8-e1b0595db2c9.png)
+
+```yaml
+spring.datasource.platform=mysql
+db.num=1
+db.url.0=jdbc:mysql://127.0.0.1:3306/nacos_config?characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true
+db.user=root
+db.password=123456
+```
+
+#### ③ 启动Nacos，可以看到的是个全新的空记录界面，以前是记录进derby
+
+### （3）Linux版Nacos + MySQL生产环境配置
+
+#### ① 预计需要，1个Nginx + 3个nacos注册中心 + 1个mysql
+
+#### ② Nacos下载Linux版
+
+![img](img/94c21b75-c2bb-4071-b27b-3d7541d515bb.jpg)
+
+![img](img/78c54491-efd1-4035-ad77-131c24520684.png)
+
+#### ③ 集群配置步骤(重点)
+
+##### 1、Linux服务器上mysql数据库配置
+
+![img](img/db49c8c4-876b-4a32-8f69-77edde2735b9.png)
+
+![img](img/67c5d1b3-aa7f-4875-8eca-23aedc47fd77.jpg)
+
+![img](img/9b17a8df-2589-482c-86ed-6ab4f7447795.jpg)
+
+##### 2、application.properties配置
+
+![img](img/ed2da0ee-151f-4c4e-9f32-d6ef794499d4.jpg)
+
+![img](img/e665f9da-fd63-41bd-8f36-85105c193339.jpg)
+
+##### 3、Linux服务器上nacos父集群配置cluster.conf
+
+![img](img/949141fd-f943-4b68-ab5d-c59c5e530710.png)
+
+![img](img/553c5309-04f4-45cc-bb7d-248c5dc7b11b.jpg)
+
+![img](img/dec33455-c192-4889-b702-413850eb5e78.png)
+
+![img](img/b5145607-6a39-435a-a8a8-775d1199ab16.png)
+
+##### 4、编辑Nacos的启动脚本startup.sh，使它能够接受不同的启动端口
+
+![img](img/28dba801-69fe-4094-b546-1f03199ba952.png)
+
+![img](img/26db1fcd-b440-4e45-839e-b0634b537d31.jpg)
+
+![img](img/5bdeb29f-61b9-4025-90ee-166a076a86a6.jpg)
+
+![img](img/3bf8ef3f-9765-4a25-9dcc-b9e264c24811.jpg)
+
+![img](img/113bace6-c27e-4da3-aa94-80ce6ee7d905.jpg)
+
+##### 5、Ngnix的配置，由它作为负载均衡器
+
+![img](img/a0dc6b7d-5799-4a6f-9b60-793b4d23209f.jpg)
+
+![img](img/e44f41bb-5e2a-4b2d-a4f0-8ced3741b800.png)
+
+![img](img/d09a1674-66b8-4eb4-82e9-9495d4806f66.jpg)
+
+![img](img/e5889c9b-07c5-48c9-87a4-a7de86657d59.jpg)
+
+![img](img/328ac2e5-e90b-4ff0-bc97-49229170f8c4.jpg)
+
+##### 6、截止到此处，1个Nginx + 3个nacos注册中心 + 1个mysql
+
+![img](img/07e011d9-1934-4ff1-b505-cdcdfe5f7fdc.png)
+
+#### ④ 测试
+
+![img](img/af751dc0-e3f9-4ab2-9f66-ae13964863b3.png)
+
+![img](img/09efd14d-6d8b-4b81-ae8a-956f2c08ffa3.jpg)
+
+#### ⑤ 高可用小总结
+
+![img](img/e9d38416-55b6-4698-8cb2-8bd894dd395d.jpg)
 
 # 十九、SpringCloud Alibaba Sentinel实现熔断与限流
 
