@@ -6651,7 +6651,1271 @@ db.password=123456
 
 # 十九、SpringCloud Alibaba Sentinel实现熔断与限流
 
+## 1、Sentinel
 
+### （1）官网
+
+https://github.com/alibaba/Sentinel
+
+中文：[https://github.com/alibaba/Sentinel/wiki/%E4%BB%8B%E7%BB%8D](https://github.com/alibaba/Sentinel/wiki/介绍)
+
+### （2）是什么
+
+![img](img/73d77932-f872-4eb7-8ded-422e68902a24.png)
+
+![img](img/ef0eb422-9fe8-4e2e-919b-6b55950f3f4b.jpg)
+
+### （3）去哪下
+
+https://github.com/alibaba/Sentinel/releases
+
+### （4）能干嘛
+
+![img](img/c4d95bcc-6907-4185-a73a-82b17d221179.jpg)
+
+### （5）怎么玩
+
+https://spring-cloud-alibaba-group.github.io/github-pages/greenwich/spring-cloud-alibaba.html#_spring_cloud_alibaba_sentinel
+
+![img](img/0a600ab2-e4d5-4d53-ae71-ee040647ded8.png)
+
+## 2、安装Sentinel控制台
+
+### （1）sentinel组件由两部分构成
+
+后台 + 前台8080
+
+![img](img/186df267-e60e-4955-ab21-5402cb485d23.jpg)
+
+### （2）安装步骤
+
+#### ① 下载
+
+![img](img/ad51b169-be99-494d-b306-7df0ef55b497.png)
+
+#### ② 运行命令
+
+![img](img/73c075f0-554e-4eee-9e8e-4b1e6710168e.png)
+
+```
+java -jar sentinel-dashboard-1.7.2.jar
+```
+
+#### ③ 访问sentinel管理界面
+
+![img](img/8f84588f-8776-4987-a04c-9afb185ab00b.png)
+
+![img](img/5fd001fc-1a89-416d-bbd5-7e001f9f14d7.jpg)
+
+## 3、初始化演示工程
+
+### （1）启动Nacos8848成功
+
+### （2）Module8401
+
+#### ① 新建cloudalibaba-sentinel-service8401
+
+#### ② 修改POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloudalibaba-sentinel-service8401</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+        <!--   后续做持久化     -->
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-datasource-nacos</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
+
+```
+
+#### ③ 新建application.yml
+
+```yaml
+server:
+  port: 8401
+  
+spring:
+  application:
+    name: cloudalibaba-sentinel-service
+  cloud:
+    nacos:
+      discovery:
+        # Nacos服务注册中心地址
+        server-addr: localhost:8848
+    sentinel:
+      transport:
+        # 配置Sentinel dashboard地址
+        dashboard: localhost:8080
+        # 默认8791端口，假如被占用会自动从8791开始依次+1扫描，直到找到未被占用的端口
+        port: 8719
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+```
+
+#### ④ 新建主启动类
+
+```java
+package com.atguigu.springcloud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+/**
+ * @author 王柳
+ * @date 2020/4/22 10:12
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+public class MainApp8401 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(MainApp8401.class,args);
+    }
+}
+
+```
+
+#### ⑤ 新建业务类
+
+```java
+package com.atguigu.springcloud.controller;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * @author 王柳
+ * @date 2020/4/22 10:18
+ */
+@RestController
+@Slf4j
+public class FlowLimitController {
+
+    @GetMapping("/testA")
+    public String testA() {
+        return "------------testA";
+    }
+
+    @GetMapping("/testB")
+    public String testB() {
+        return "------------testB";
+    }
+
+}
+
+```
+
+### （3）启动Sentinel8080
+
+```
+java -jar sentinel-dashboard-1.7.2.jar
+```
+
+### （4）启动微服务8041
+
+### （5）查看sentinel控制台
+
+刚进来什么都没有。因为Sentinel采用的懒加载：执行一次访问即可http://localhost:8401/testA
+
+![img](img/d332a8f5-c13f-412c-92a8-4e4763675e00.png)
+
+## 4、流控规则
+
+### （1）基本介绍
+
+![img](img/38e7977c-5636-47ec-ad79-0eeb6053a4fd.jpg)
+
+![img](img/e6871378-518f-4889-8977-be9a71fa8627.png)
+
+![img](img/89e1819e-12c5-4326-bfae-16f313580062.png)
+
+### （2）流控模式
+
+#### ① 直接(默认)
+
+![img](img/3c52d8b5-d9ba-4f0b-b953-77f4f57bcc7a.png)
+
+![img](img/96898c90-da52-474d-9db8-99603657d1a4.png)
+
+#### ② 关联
+
+##### 是什么
+
+![img](img/7380922c-febb-46a3-9315-cec0d294ec52.png)
+
+##### 配置A
+
+![img](img/633cee92-4d04-4ab7-82d8-e1a950320afa.jpg)
+
+##### postman模拟并发密集访问testB
+
+![img](img/4785517d-ae10-4305-a45a-7ec9bfdd1960.jpg)
+
+![img](img/f63cb95e-106e-42ca-a5b4-c8e9ede82177.jpg)
+
+![img](img/d127f7c8-dda3-4345-9bd9-f1dda6ff0985.png)
+
+![img](img/359c487c-da80-47c3-89c3-2adf0522cc44.png)
+
+![img](img/05cedd95-9391-4e11-954a-333840f0fe60.jpg)
+
+![img](img/8ac1bda2-b8f2-4b38-891e-b2d1e14c4adb.png)
+
+##### 运行后发现testA挂了
+
+![img](img/97e5e6c4-8bf5-46b6-ab21-90975935290e.png)
+
+#### ③ 链路
+
+![img](img/0f808774-e0ae-4922-b7d4-feffcba567d4.png)
+
+### （3）流控效果
+
+#### ① 直接->快速失败(默认的流控处理)
+
+![img](img/6948d55e-4fac-41f7-94ef-d9aebc9d5c37.png)
+
+#### ② 预热
+
+##### 说明
+
+![img](img/850ca38b-7c83-470f-a396-e8529e4eb988.png)
+
+##### 官网
+
+![img](img/9d1e0d06-d676-437b-8498-43f3e5f6c54b.jpg)
+
+![img](img/6f73539f-5a53-4438-bd40-ff79219b8425.jpg)
+
+默认 `coldFactor` 为 3，即请求 QPS 从 `threshold / 3` 开始，经预热时长逐渐升至设定的 QPS 阈值。
+
+[https://github.com/alibaba/Sentinel/wiki/%E9%99%90%E6%B5%81---%E5%86%B7%E5%90%AF%E5%8A%A8](https://github.com/alibaba/Sentinel/wiki/限流---冷启动)
+
+##### 源码
+
+![img](img/195194f1-a1ff-4317-a3cb-50c576a01cc9.jpg)
+
+##### WarmUp 配置
+
+![img](img/582040a7-405c-4d07-80c9-1b5189e64ede.jpg)
+
+##### 测试
+
+![img](img/f10893f3-7f21-4340-90c3-310bde3bb7c0.png)
+
+![img](img/2759383b-6565-4d4e-9a51-7ae8b43c0e95.png)
+
+##### 应用场景
+
+![img](img/d14fe3ac-d904-4b43-a98b-de521ac348bb.jpg)
+
+#### ③ 排队等待
+
+##### 说明
+
+![img](img/0d2147ee-df79-487d-8b25-0187ffe1bb24.jpg)
+
+##### 官网
+
+![img](img/014fcd66-d871-470e-9286-a6edab72f6c3.jpg)
+
+![img](img/ce9387ff-2f25-4383-b4a7-77594df6d000.jpg)
+
+##### 测试
+
+```java
+    @GetMapping("/testB")
+    public String testB() {
+        log.info(Thread.currentThread().getName() + "\t" + "...testB");
+        return "------------testB";
+    }
+```
+
+![img](img/428edd41-022b-4215-83c1-6b2f4f9e7995.jpg)
+
+## 5、降级规则
+
+### （1）官网
+
+[https://github.com/alibaba/Sentinel/wiki/%E7%86%94%E6%96%AD%E9%99%8D%E7%BA%A7](https://github.com/alibaba/Sentinel/wiki/熔断降级)
+
+### （2）基本介绍
+
+![img](img/95b0b6bf-25f6-4d54-b923-30d125d633b8.jpg)
+
+![img](img/6320f9bb-c461-4561-9e7c-f603fcf37bc3.jpg)
+
+![img](img/47d4584d-83cc-43f0-8e6d-bc89fed14234.jpg)
+
+![img](img/a236c378-5f9e-4ed9-bd3d-478c87c1aa0e.png)
+
+### （3）降级策略实战
+
+#### ① RT
+
+##### 是什么
+
+![img](img/248657f3-f625-4402-a27b-61b7087cf8d4.jpg)
+
+![img](img/a11e5bd8-9edf-409c-a0e1-5dc311d5d64f.jpg)
+
+##### 测试
+
+```java
+    @GetMapping("/testD")
+    public String testD() {
+        try {
+            TimeUnit.SECONDS.sleep(1);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        log.info("testD 测试RT");
+        return "------------testD";
+    }
+```
+
+![img](img/17952a4d-42c4-4b14-8e7b-5f875f871214.png)
+
+![img](img/338a1c89-0691-4407-a410-6b86a9d00ab6.jpg)
+
+![img](img/4151f039-7a64-49a9-96b0-3e7d4c370b7a.jpg)
+
+#### ② 异常比例
+
+##### 是什么
+
+![img](img/5609ba09-665c-403f-987d-6d24188ea8a0.jpg)
+
+![img](img/e5f87b0d-96c2-4ae4-a3aa-51225a3939e8.jpg)
+
+##### 测试
+
+```java
+    @GetMapping("/testD")
+    public String testD() {
+//        try {
+//            TimeUnit.SECONDS.sleep(1);
+//        } catch (InterruptedException e) {
+//            e.printStackTrace();
+//        }
+//        log.info("testD 测试RT");
+        
+        log.info("testD 测试异常比例");
+        int age = 10/0;
+        return "------------testD";
+    }
+```
+
+![img](img/a35e065f-3b09-46b8-b365-2ba3a62d2dac.png)
+
+![img](img/2c41acfd-a88f-42be-bbaa-00f860731ab2.jpg)
+
+![img](img/fb1c437f-6779-4728-a59d-673b5e44c091.jpg)
+
+#### ③ 异常数
+
+##### 是什么
+
+![img](img/274763d3-addf-484e-b4a9-072836dcd58b.jpg)
+
+![img](img/ed4e4ab0-4139-4326-99b5-5c699e46e8e3.jpg)
+
+##### 测试
+
+```java
+    @GetMapping("/testE")
+    public String testE() {
+        log.info("testE 测试异常数");
+        int age = 10/0;
+        return "------------testE";
+    }
+```
+
+![img](img/487f8997-8e9b-4a38-96f1-343de4080922.png)
+
+## 6、热点key限流
+
+### （1）基本介绍
+
+![img](img/af7de974-9397-4ace-a2fc-1b19bdbd0f34.png)
+
+![img](img/d2c6a304-0165-48f2-ad0b-fa099ae48013.jpg)
+
+### （2）官网
+
+[https://github.com/alibaba/Sentinel/wiki/%E7%83%AD%E7%82%B9%E5%8F%82%E6%95%B0%E9%99%90%E6%B5%81](https://github.com/alibaba/Sentinel/wiki/热点参数限流)
+
+### （3）承上启下复习
+
+![img](img/84da059b-ba6c-4a01-888f-cbc337ee1a7f.jpg)
+
+### （4）代码
+
+源码：![img](img/c2d14cb2-63a8-444f-a29b-ba2821508ba7.png)
+
+```java
+    @GetMapping("/testHotKey")
+    @SentinelResource(value = "testHotKey",blockHandler = "deal_testHotKey")
+    public String testHotKey(@RequestParam(value = "p1",required = false) String p1,
+                             @RequestParam(value = "p2",required = false) String p2){
+        return "---------testHotKey";
+    }
+
+    public String deal_testHotKey(String p1, String p2, BlockException exception){
+        return "----------deal_testHotKey,~~~~(>_<)~~~~";
+    }
+```
+
+**（5）配置**
+
+![img](img/d68b57e6-5783-42d8-903a-94dec8e58218.jpg)
+
+![img](img/417e11a5-ba74-4cdd-a0cc-cd5322a515f8.jpg)
+
+![img](img/8d413202-a997-47e6-a693-237fed2ead73.jpg)
+
+### （6）测试
+
+快速点击：
+
+![img](img/454164a6-0ff1-4940-a544-ae0f12c04e7e.jpg)
+
+### （7）参数例外项
+
+![img](img/3b8a5299-525f-4f28-a59a-2519933a182c.png)
+
+#### ① 特例情况
+
+![img](img/ebe89e58-abe3-421e-bb2a-2cb456b17505.png)
+
+#### ② 配置
+
+![img](img/8c8a29d5-a36b-4948-af79-b963dc703a7b.jpg)
+
+#### ③ 测试
+
+![img](img/35c95ffb-d82e-44bf-824b-04c6a999eb14.png)
+
+#### ④ 前提条件
+
+![img](img/94f1dc86-d2dc-4505-9b64-2427c3895055.png)
+
+### （8）其他
+
+![img](img/917a4d65-3a9e-4b50-a4c1-de32049f9243.png)
+
+```java
+    @GetMapping("/testHotKey")
+    @SentinelResource(value = "testHotKey",blockHandler = "deal_testHotKey")
+    public String testHotKey(@RequestParam(value = "p1",required = false) String p1,
+                             @RequestParam(value = "p2",required = false) String p2){
+        int age =10/0;
+        return "---------testHotKey";
+    }
+
+    public String deal_testHotKey(String p1, String p2, BlockException exception){
+        return "----------deal_testHotKey,~~~~(>_<)~~~~";
+    }
+```
+
+![img](img/576a999a-bff4-4282-b6af-098e788244f0.png)
+
+![img](img/826bb5e3-f317-4227-8cd6-d243c48e1c79.jpg)
+
+## 7、系统规则
+
+### （1）是什么
+
+![img](img/1242ba42-8aab-4227-bbe9-0b3ca5fb59a6.png)
+
+[https://github.com/alibaba/Sentinel/wiki/%E7%B3%BB%E7%BB%9F%E8%87%AA%E9%80%82%E5%BA%94%E9%99%90%E6%B5%81](https://github.com/alibaba/Sentinel/wiki/系统自适应限流)
+
+### （2）各项配置参数说明
+
+![img](img/18e76387-4c7f-4820-a56d-954a65820c0e.jpg)
+
+### （3）配置全局QPS
+
+![img](img/56388cde-9b27-4a9f-b3ac-c118e58db3fd.png)
+
+多次点击：http://localhost:8401/testA
+
+![img](img/ea7cf476-857c-47e4-8a57-3a628323f573.png)
+
+## 8、@SentinelResource
+
+### （1）按资源名称限流 + 后续处理
+
+#### ① 启动Nacos和Sentinel成功
+
+#### ② 修改cloudalibaba-sentinel-service8401
+
+修改POM，添加如下：
+
+```xml
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+```
+
+新增业务类RateLimitController：
+
+```java
+package com.atguigu.springcloud.controller;
+
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.alibaba.csp.sentinel.slots.block.BlockException;
+import com.atguigu.springcloud.entities.CommonResult;
+import com.atguigu.springcloud.entities.Payment;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * @author 王柳
+ * @date 2020/4/22 14:52
+ */
+@RestController
+@Slf4j
+public class RateLimitController {
+
+    @GetMapping("/byResource")
+    @SentinelResource(value = "byResource", blockHandler = "handleException")
+    public CommonResult byResource() {
+        return new CommonResult(200, "按资源名称限流OK", new Payment(2020L, "serial001"));
+    }
+
+    public CommonResult handleException(BlockException exception) {
+        return new CommonResult(444, exception.getClass().getCanonicalName() + "\t 服务不可用");
+    }
+}
+
+```
+
+**③ 配置流控规则**
+
+![img](img/43b7611e-0e50-455c-b679-677070117950.jpg)
+
+![img](img/4a739828-5cb9-4197-a5e9-0968a4254eb0.png)
+
+#### ④ 测试
+
+![img](img/0ca5b93e-81f1-40cc-8f3c-48ec91743c5b.png)
+
+![img](img/90cb2ecd-0df4-4afc-9c42-b1d220d4b890.png)
+
+#### ⑤ 额外问题
+
+![img](img/f69ccec3-dfca-4516-bb1b-491809dbf50c.jpg)
+
+### （2）按Url地址限流 + 后续处理
+
+![img](img/580dd53d-8a0b-4b61-9dce-f13f1d2556e9.png)
+
+```java
+    @GetMapping("/rateLimit/byUrl")
+    @SentinelResource(value = "byUrl")
+    public CommonResult byUrl() {
+        return new CommonResult(200, "按Url限流OK", new Payment(2020L, "serial002"));
+    }
+
+```
+
+![img](img/b9415713-29e6-4905-b330-1a36ac98c28b.png)
+
+![img](img/3b88844c-4d57-4902-8f59-56c8e23144bb.jpg)
+
+### （3）上面兜底方案面临的问题
+
+![img](img/88c40f66-63d3-4a86-8746-0205af2260c8.jpg)
+
+### （4）客户自定义限流处理逻辑
+
+#### ① 创建CustomerBlockHandler类用于自定义限流处理逻辑
+
+#### ② 自定义限流处理类
+
+```java
+package com.atguigu.springcloud.myhandler;
+
+import com.alibaba.csp.sentinel.slots.block.BlockException;
+import com.atguigu.springcloud.entities.CommonResult;
+
+/**
+ * @author 王柳
+ * @date 2020/4/22 15:17
+ */
+public class CustomerBlockHandler {
+
+    public static CommonResult handlerException(BlockException exception) {
+        return new CommonResult(4444, "按客户自定义限流,global handlerException-----1");
+    }
+
+    public static CommonResult handlerException2(BlockException exception) {
+        return new CommonResult(4444, "按客户自定义限流,global handlerException-----2");
+    }
+}
+
+```
+
+#### ③ RateLimitController
+
+```java
+    @GetMapping("/rateLimit/customerBlockHandler")
+    @SentinelResource(value = "customerBlockHandler",
+            blockHandlerClass = CustomerBlockHandler.class,
+            blockHandler = "handlerException2")
+    public CommonResult customerBlockHandler() {
+        return new CommonResult(200, "按客户自定义限流OK", new Payment(2020L, "serial003"));
+    }
+```
+
+#### ④ 启动微服务后先调用一次
+
+http://localhost:8401/rateLimit/customerBlockHandler
+
+#### ⑤ Sentinel控制台配置
+
+![img](img/e2e8a661-3d9b-4091-b529-6d3957a1755c.png)
+
+#### ⑥ 测试
+
+多次点击：
+
+![img](img/6353c692-0eef-4c45-82d6-09ba9f0fc4b8.png)
+
+#### ⑦ 进一步说明
+
+![img](img/49db58b4-9219-4670-a14e-33251db8cbea.jpg)
+
+### （5）更多注解属性说明
+
+[https://github.com/alibaba/Sentinel/wiki/%E6%B3%A8%E8%A7%A3%E6%94%AF%E6%8C%81](https://github.com/alibaba/Sentinel/wiki/注解支持)
+
+![img](img/99a17600-346a-4801-aa55-cbb41d7d772e.png)
+
+![img](img/bd391d29-2863-468b-93f4-1030a7dbd8cc.jpg)
+
+![img](img/19a18cb2-d446-4aaf-a393-2bf3a6cc2cfa.png)
+
+## 9、服务熔断功能
+
+### （1）Ribbon系列
+
+#### ① 启动nacos和Sentinel成功
+
+#### ② 提供者9003/9005
+
+##### 新建cloudalibaba-provider-payment9003
+
+cloudalibaba-provider-payment9005一样
+
+##### 修改POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloudalibaba-provider-payment9003</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
+
+```
+
+##### 新建application.yml
+
+```yaml
+server:
+  port: 9003
+
+spring:
+  application:
+    name: nacos-payment-provider
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 # 配置Nacos地址
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+```
+
+##### 新建主启动类
+
+```java
+package com.atguigu.springcloud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+/**
+ * @author 王柳
+ * @date 2020/4/22 15:37
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+public class PaymentMain9003 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(PaymentMain9003.class,args);
+    }
+}
+
+```
+
+##### 新建业务类
+
+```java
+package com.atguigu.springcloud;
+
+import com.atguigu.springcloud.entities.CommonResult;
+import com.atguigu.springcloud.entities.Payment;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:48
+ */
+@RestController
+@Slf4j
+public class PaymentController {
+
+    @Value("${server.port}")
+    private String serverPort;
+
+    public static HashMap<Long, Payment> hashMap = new HashMap<>();
+
+    static {
+        hashMap.put(1L, new Payment(1L, "aj891jdj819jcj8290kdffk03i3rnf"));
+        hashMap.put(2L, new Payment(2L, "fhj991n9jdjnsidu9sdjdjns9od9sj"));
+        hashMap.put(3L, new Payment(3L, "h99jnjdois9od903mds9du39jdsoi9"));
+    }
+
+    @GetMapping("/paymentSQL/{id}")
+    public CommonResult<Payment> paymentSQL(@PathVariable("id") Long id) {
+        Payment payment = hashMap.get(id);
+        CommonResult<Payment> result = new CommonResult(200, "from mysql,serverPort: " + serverPort, payment);
+        return result;
+    }
+}
+
+```
+
+**测试地址**
+
+http://localhost:9003/paymentSQL/1
+
+#### ③ 消费者84
+
+##### 新建cloudalibaba-consumer-nacos-order84
+
+##### 修改POM
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>cloud2020</artifactId>
+        <groupId>com.atguigu.springcloud</groupId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloudalibaba-consumer-nacos-order84</artifactId>
+    <dependencies>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.atguigu.springcloud</groupId>
+            <artifactId>cloud-api-commons</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
+
+```
+
+##### 新建application.yml
+
+```yaml
+server:
+  port: 84
+
+spring:
+  application:
+    name: nacos-order-consumer
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848 # 配置Nacos地址
+    sentinel:
+      transport:
+        # 配置Sentinel dashboard地址
+        dashboard: localhost:8080
+        # 默认8791端口，假如被占用会自动从8791开始依次+1扫描，直到找到未被占用的端口
+        port: 8719
+#消费者将要去访问的微服务名称（注册成功进nacos的微服务提供者）
+service-url:
+  nacos-user-service: http://nacos-payment-provider
+
+```
+
+##### 新建主启动类
+
+```java
+package springcloud;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:47
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+public class OrderMain84 {
+
+    public static void main(String[] args) {
+        SpringApplication.run(OrderMain84.class,args);
+    }
+}
+
+```
+
+##### 新建业务类
+
+```java
+package springcloud.config;
+
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
+
+/**
+ * @author 王柳
+ * @date 2020/4/2 15:11
+ */
+@Configuration
+public class ApplicationContextConfig {
+
+    @Bean
+    @LoadBalanced
+    public RestTemplate getRestTemplate() {
+        return new RestTemplate();
+    }
+}
+
+```
+
+ 
+
+```java
+package springcloud.controller;
+
+import com.alibaba.csp.sentinel.annotation.SentinelResource;
+import com.atguigu.springcloud.entities.CommonResult;
+import com.atguigu.springcloud.entities.Payment;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+
+import javax.annotation.Resource;
+
+/**
+ * @author 王柳
+ * @date 2020/4/21 11:48
+ */
+@RestController
+@Slf4j
+public class CircleBreakerController {
+
+    @Resource
+    private RestTemplate restTemplate;
+
+    @Value("${service-url.nacos-user-service}")
+    private String serverURL;
+
+    @GetMapping("/consumer/fallback/{id}")
+    @SentinelResource(value = "fallback")//没有配置
+//    @SentinelResource(value = "fallback", fallback = "handleFallback")//fallback只负责业务异常
+//    @SentinelResource(value = "fallback", blockHandler = "blockHandler")//blockHandler只负责Sentinel控制台配置违规
+//    @SentinelResource(value = "fallback", fallback = "handleFallback", blockHandler = "blockHandler")
+    public CommonResult<Payment> fallback(@PathVariable("id") Long id) {
+        CommonResult<Payment> result = restTemplate.getForObject(serverURL + "/paymentSQL/" + id, CommonResult.class, id);
+        if (id == 4) {
+            throw new IllegalArgumentException("IllegalArgumentException,非法参数异常...");
+        } else if (result.getData() == null) {
+            throw new NullPointerException("NullPointerException,该ID没有对应记录，空指针异常");
+        }
+        return result;
+    }
+    
+    public CommonResult<Payment> handleFallback(@PathVariable("id") Long id, Throwable e) {
+        Payment payment = new Payment(id, "null");
+        return new CommonResult<>(444, "兜底异常handleFallback，exception内容：" + e.getMessage(), payment);
+    }
+    
+    public CommonResult<Payment> blockHandler(Long id, BlockException exception) {
+        Payment payment = new Payment(id, "null");
+        return new CommonResult<>(445, "blockHandler-sentinel限流，无此流水：exception   " + exception.getMessage(), payment);
+
+    }
+}
+
+```
+
+![img](img/8ed84725-1385-4150-82b1-d5eb3ed92ba4.png)
+
+![img](img/73c74497-0387-4ecd-9af7-37efaf6cbb76.png)
+
+![img](img/3aa3a96d-4693-4dd3-a66b-f3b37a337d59.png)
+
+![img](img/335fafe8-1d59-4614-82ea-d659a11be0e3.png)
+
+![img](img/1116dcbf-f0ff-41df-8095-4179688a755e.jpg)
+
+![img](img/eece9abb-4e3c-4416-b1da-ca2a88b7805c.jpg)
+
+##### 忽略属性exceptionsToIgnore
+
+![img](img/b6d02d00-a1d8-468a-86ea-cb0fe96f4dfb.jpg)
+
+### （2）Feign系列
+
+#### ① 修改84模块
+
+![img](img/06481f4b-aff6-4beb-95f4-4b9a06f689e3.png)
+
+#### ② 修改POM
+
+```xml
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
+```
+
+#### ③ 修改application.yml
+
+```xml
+feign:
+  sentinel:
+    enabled: true
+```
+
+#### ③ 修改新建业务类
+
+```java
+package springcloud.service;
+
+import com.atguigu.springcloud.entities.CommonResult;
+import com.atguigu.springcloud.entities.Payment;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+/**
+ * @author 王柳
+ * @date 2020/4/22 16:58
+ */
+@FeignClient(value = "nacos-payment-provider", fallback = PaymentFallbackService.class)
+public interface PaymentService {
+
+    @GetMapping("/paymentSQL/{id}")
+    CommonResult<Payment> paymentSQL(@PathVariable("id") Long id);
+}
+
+```
+
+ 
+
+```java
+package springcloud.service;
+
+import com.atguigu.springcloud.entities.CommonResult;
+import com.atguigu.springcloud.entities.Payment;
+import org.springframework.stereotype.Component;
+
+/**
+ * @author 王柳
+ * @date 2020/4/22 17:01
+ */
+@Component
+public class PaymentFallbackService implements PaymentService {
+    @Override
+    public CommonResult<Payment> paymentSQL(Long id) {
+        return new CommonResult<>(4444,"服务降级返回----》PaymentFallbackService",new Payment(id,"error serial"));
+    }
+}
+
+```
+
+修改CircleBreakerController，添加如下：
+
+```java
+    @Resource
+    private PaymentService paymentService;
+
+    @GetMapping("/consumer/openFegin/{id}")
+    public CommonResult<Payment> paymentSQL(@PathVariable("id") Long id) {
+        return paymentService.paymentSQL(id);
+    }
+```
+
+#### **④ 修改主启动**
+
+```java
+@EnableFeignClients
+```
+
+#### ⑤ 测试
+
+![img](img/fcaed5d4-ef62-458a-a817-d0d49d917844.png)
+
+### （3）熔断框架比较
+
+![img](img/9943e853-5a0c-4a8d-8601-0e4cd0ba406c.jpg)
+
+![img](img/d3087d70-6b40-40e2-b25b-6a422d51d12e.jpg)
+
+## 10、规则持久化
+
+### （1）是什么
+
+![img](img/e3407556-5101-431b-854e-19c33a22f194.png)
+
+### （2）怎么玩
+
+![img](img/5f2957cc-1a54-4d1e-966c-e86bd796769f.png)
+
+### （3）步骤
+
+#### ① 修改cloudalibaba-sentinel-service8401
+
+#### ② 修改POM
+
+```xml
+        <dependency>
+            <groupId>com.alibaba.csp</groupId>
+            <artifactId>sentinel-datasource-nacos</artifactId>
+        </dependency>
+```
+
+#### ③ 修改application.yml
+
+添加datasource
+
+```yaml
+spring:
+  application:
+    name: cloudalibaba-sentinel-service
+  cloud:
+    nacos:
+      discovery:
+        # Nacos服务注册中心地址
+        server-addr: localhost:8848
+    sentinel:
+      transport:
+        # 配置Sentinel dashboard地址
+        dashboard: localhost:8080
+        # 默认8791端口，假如被占用会自动从8791开始依次+1扫描，直到找到未被占用的端口
+        port: 8719
+      datasource:
+        ds1:
+          nacos:
+            server-addr: localhost:8848
+            dataId: ${spring.application.name}
+            groupId: DEFAULT_GROUP
+            data-type: json
+            rule-type: flow
+```
+
+#### ④ 添加Nacos业务规则配置
+
+![img](img/db9203a9-0b1a-4870-afb9-6d06089305eb.jpg)
+
+```json
+[
+    {
+        "resource":"/rateLimit/byUrl",
+        "limitApp":"default",
+        "grade":1,
+        "count":1,
+        "strategy":0,
+        "controlBehavior":0,
+        "clusterMode":false
+    }
+]
+```
+
+![img](img/bfea7134-0f47-407e-a1b0-a275dadad795.jpg)
+
+#### ⑤ 启动8401后刷新Sentinel发现业务规则有了
+
+![img](img/86fe2b7a-6179-4db2-a9c4-406d00d9bd1b.jpg)
+
+#### ⑥ 快速访问测试接口
+
+![img](img/d4e3661a-d963-4dda-9057-5921765a7853.png)
+
+#### ⑦ 停止8401再看Sentinel
+
+![img](img/925b6272-1d50-4169-94ef-01213576eb3a.jpg)
+
+#### ⑧ 重新启动8401再看sentinel
+
+![img](img/1229d796-8943-485d-be4c-b9da0f4dae7a.png)
 
 # 二十、SpringCloud Alibaba Seata处理分布式事务
 
