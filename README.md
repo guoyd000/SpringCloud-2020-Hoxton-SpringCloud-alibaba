@@ -9252,6 +9252,448 @@ http://localhost:2001/order/create?userId=1&productId=1&count=10&money=100
 
 ![img](img/1221508d-dbc5-4cce-9bfb-c095183052d6.jpg)
 
+## 8、升级Seata版本为1.2，使用nacos作为配置和注册中心
+
+### （1）下载1.2.0的版本，启动Nacos
+
+https://github.com/seata/seata/releases
+
+对应配置和db文件：https://github.com/seata/seata/tree/1.2.0/script
+
+### （2）创建seata1.2、seata_order1.2、seata_storage1.2、seata_account1.2的库，建立对应表
+
+#### seata1.2：
+
+```sql
+-- -------------------------------- The script used when storeMode is 'db' --------------------------------
+-- the table to store GlobalSession data
+CREATE TABLE IF NOT EXISTS `global_table`
+(
+    `xid`                       VARCHAR(128) NOT NULL,
+    `transaction_id`            BIGINT,
+    `status`                    TINYINT      NOT NULL,
+    `application_id`            VARCHAR(32),
+    `transaction_service_group` VARCHAR(32),
+    `transaction_name`          VARCHAR(128),
+    `timeout`                   INT,
+    `begin_time`                BIGINT,
+    `application_data`          VARCHAR(2000),
+    `gmt_create`                DATETIME,
+    `gmt_modified`              DATETIME,
+    PRIMARY KEY (`xid`),
+    KEY `idx_gmt_modified_status` (`gmt_modified`, `status`),
+    KEY `idx_transaction_id` (`transaction_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8;
+-- the table to store BranchSession data
+CREATE TABLE IF NOT EXISTS `branch_table`
+(
+    `branch_id`         BIGINT       NOT NULL,
+    `xid`               VARCHAR(128) NOT NULL,
+    `transaction_id`    BIGINT,
+    `resource_group_id` VARCHAR(32),
+    `resource_id`       VARCHAR(256),
+    `branch_type`       VARCHAR(8),
+    `status`            TINYINT,
+    `client_id`         VARCHAR(64),
+    `application_data`  VARCHAR(2000),
+    `gmt_create`        DATETIME(6),
+    `gmt_modified`      DATETIME(6),
+    PRIMARY KEY (`branch_id`),
+    KEY `idx_xid` (`xid`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8;
+-- the table to store lock data
+CREATE TABLE IF NOT EXISTS `lock_table`
+(
+    `row_key`        VARCHAR(128) NOT NULL,
+    `xid`            VARCHAR(96),
+    `transaction_id` BIGINT,
+    `branch_id`      BIGINT       NOT NULL,
+    `resource_id`    VARCHAR(256),
+    `table_name`     VARCHAR(32),
+    `pk`             VARCHAR(36),
+    `gmt_create`     DATETIME,
+    `gmt_modified`   DATETIME,
+    PRIMARY KEY (`row_key`),
+    KEY `idx_branch_id` (`branch_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8;
+```
+
+#### seata_order1.2、seata_storage1.2、seata_account1.2
+
+t_order和t_storage和t_account表和之前一致。
+
+不一样的是undo_log：
+
+```sql
+-- for AT mode you must to init this sql for you business database. the seata server not need it.
+CREATE TABLE IF NOT EXISTS `undo_log`
+(
+    `id`            BIGINT(20)   NOT NULL AUTO_INCREMENT COMMENT 'increment id',
+    `branch_id`     BIGINT(20)   NOT NULL COMMENT 'branch transaction id',
+    `xid`           VARCHAR(100) NOT NULL COMMENT 'global transaction id',
+    `context`       VARCHAR(128) NOT NULL COMMENT 'undo_log context,such as serialization',
+    `rollback_info` LONGBLOB     NOT NULL COMMENT 'rollback info',
+    `log_status`    INT(11)      NOT NULL COMMENT '0:normal status,1:defense status',
+    `log_created`   DATETIME     NOT NULL COMMENT 'create datetime',
+    `log_modified`  DATETIME     NOT NULL COMMENT 'modify datetime',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `ux_undo_log` (`xid`, `branch_id`)
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  DEFAULT CHARSET = utf8 COMMENT ='AT transaction mode undo table';
+```
+
+### （3）修改file.conf和registry.conf
+
+file.conf：
+
+```
+## transaction log store, only used in seata-server
+store {
+  ## store mode: file、db
+  mode = "db"
+  ## file store property
+  file {
+    ## store location dir
+    dir = "sessionStore"
+    # branch session size , if exceeded first try compress lockkey, still exceeded throws exceptions
+    maxBranchSessionSize = 16384
+    # globe session size , if exceeded throws exceptions
+    maxGlobalSessionSize = 512
+    # file buffer size , if exceeded allocate new buffer
+    fileWriteBufferCacheSize = 16384
+    # when recover batch read size
+    sessionReloadReadSize = 100
+    # async, sync
+    flushDiskMode = async
+  }
+  ## database store property
+  db {
+    ## the implement of javax.sql.DataSource, such as DruidDataSource(druid)/BasicDataSource(dbcp) etc.
+    datasource = "druid"
+    ## mysql/oracle/postgresql/h2/oceanbase etc.
+    dbType = "mysql"
+    driverClassName = "com.mysql.jdbc.Driver"
+    url = "jdbc:mysql://127.0.0.1:3306/seata1.2"
+    user = "root"
+    password = "123456"
+    minConn = 5
+    maxConn = 30
+    globalTable = "global_table"
+    branchTable = "branch_table"
+    lockTable = "lock_table"
+    queryLimit = 100
+    maxWait = 5000
+  }
+}
+```
+
+registry.conf：
+
+```
+registry {
+  # file 、nacos 、eureka、redis、zk、consul、etcd3、sofa
+  type = "nacos"
+  nacos {
+    application = "seata-server"
+    serverAddr = "localhost:8848"
+    namespace = ""
+    cluster = "default"
+    username = ""
+    password = ""
+  }
+  eureka {
+    serviceUrl = "http://localhost:8761/eureka"
+    application = "default"
+    weight = "1"
+  }
+  redis {
+    serverAddr = "localhost:6379"
+    db = 0
+    password = ""
+    cluster = "default"
+    timeout = 0
+  }
+  zk {
+    cluster = "default"
+    serverAddr = "127.0.0.1:2181"
+    sessionTimeout = 6000
+    connectTimeout = 2000
+    username = ""
+    password = ""
+  }
+  consul {
+    cluster = "default"
+    serverAddr = "127.0.0.1:8500"
+  }
+  etcd3 {
+    cluster = "default"
+    serverAddr = "http://localhost:2379"
+  }
+  sofa {
+    serverAddr = "127.0.0.1:9603"
+    application = "default"
+    region = "DEFAULT_ZONE"
+    datacenter = "DefaultDataCenter"
+    cluster = "default"
+    group = "SEATA_GROUP"
+    addressWaitTime = "3000"
+  }
+  file {
+    name = "file.conf"
+  }
+}
+config {
+  # file、nacos 、apollo、zk、consul、etcd3
+  type = "nacos"
+  nacos {
+    serverAddr = "localhost:8848"
+    namespace = ""
+    group = "SEATA_GROUP"
+    username = ""
+    password = ""
+  }
+  consul {
+    serverAddr = "127.0.0.1:8500"
+  }
+  apollo {
+    appId = "seata-server"
+    apolloMeta = "http://192.168.1.204:8801"
+    namespace = "application"
+  }
+  zk {
+    serverAddr = "127.0.0.1:2181"
+    sessionTimeout = 6000
+    connectTimeout = 2000
+    username = ""
+    password = ""
+  }
+  etcd3 {
+    serverAddr = "http://localhost:2379"
+  }
+  file {
+    name = "file.conf"
+  }
+}
+```
+
+### （4）将配置加入到nacos中
+
+https://github.com/seata/seata/tree/1.2.0/script/config-center 
+
+从官网下载 config.txt 和 相应的脚本，同时修改config.txt中的配置：
+
+![img](img/64e3e360-b08a-4d1d-81d9-cabb3271f5ba.png)
+
+![img](img/298b50e4-b189-466b-898e-0bcc2dfeabf7.png)
+
+ 
+
+```shell
+# linux/mac: 
+sh nacos-config.sh localhost:8848      
+   
+# windows: 
+nacos-config.py localhost:8848
+ 
+# localhost:8848 需要修改成你自己nacos的访问地址
+```
+
+### **（5）启动seata服务**
+
+### （6）修改cloud2020根目录下的POM
+
+[https://github.com/alibaba/spring-cloud-alibaba/wiki/%E7%89%88%E6%9C%AC%E8%AF%B4%E6%98%8E](https://github.com/alibaba/spring-cloud-alibaba/wiki/版本说明)
+
+![img](img/1431dd81-2e92-4c0a-a261-22741b34a762.png)
+
+![img](img/ade9a427-e18c-44f3-ba51-196f5ffbedf6.png)
+
+### （7）仿照2001、2002、2003建立3001、3002、3003
+
+### （8）修改POM，将seata-all替换为seata-spring-boot-starter
+
+```xml
+        <!-- seata-->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+            <exclusions>
+                <exclusion>
+                    <artifactId>seata-all</artifactId>
+                    <groupId>io.seata</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>io.seata</groupId>
+            <artifactId>seata-spring-boot-starter</artifactId>
+            <version>1.2.0</version>
+        </dependency>
+```
+
+### （9）删除resource下的file.conf和registry.conf，修改application.yml
+
+3001和3002类似：
+
+参考：https://github.com/seata/seata/blob/1.2.0/script/client/spring/application.yml
+
+```yaml
+server:
+  port: 3003
+spring:
+  application:
+    name: seata-account-service
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+  datasource:
+    driver-class-name: com.mysql.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/seata_account1.2?useUnicode=true&characterEncoding=utf-8&useSSL=false
+    username: root
+    password: 123456
+logging:
+  level:
+    io:
+      seata: info
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+seata:
+  enabled: true
+  application-id: applicationName
+  tx-service-group: my_test_tx_group
+  enable-auto-data-source-proxy: true
+  use-jdk-proxy: false
+  excludes-for-auto-proxying: firstClassNameForExclude,secondClassNameForExclude
+  client:
+    rm:
+      async-commit-buffer-limit: 1000
+      report-retry-count: 5
+      table-meta-check-enable: false
+      report-success-enable: false
+      saga-branch-register-enable: false
+      lock:
+        retry-interval: 10
+        retry-times: 30
+        retry-policy-branch-rollback-on-conflict: true
+    tm:
+      commit-retry-count: 5
+      rollback-retry-count: 5
+    undo:
+      data-validation: true
+      log-serialization: jackson
+      log-table: undo_log
+    log:
+      exceptionRate: 100
+  service:
+    vgroup-mapping:
+      my_test_tx_group: default
+    grouplist:
+      default: 127.0.0.1:8091
+    enable-degrade: false
+    disable-global-transaction: false
+  transport:
+    shutdown:
+      wait: 3
+    thread-factory:
+      boss-thread-prefix: NettyBoss
+      worker-thread-prefix: NettyServerNIOWorker
+      server-executor-thread-prefix: NettyServerBizHandler
+      share-boss-worker: false
+      client-selector-thread-prefix: NettyClientSelector
+      client-selector-thread-size: 1
+      client-worker-thread-prefix: NettyClientWorkerThread
+      worker-thread-size: default
+      boss-thread-size: 1
+    type: TCP
+    server: NIO
+    heartbeat: true
+    serialization: seata
+    compressor: none
+    enable-client-batch-send-request: true
+  config:
+    type: nacos
+    consul:
+      server-addr: 127.0.0.1:8500
+    apollo:
+      apollo-meta: http://192.168.1.204:8801
+      app-id: seata-server
+      namespace: application
+    etcd3:
+      server-addr: http://localhost:2379
+    nacos:
+      namespace:
+      serverAddr: localhost:8848
+      group: SEATA_GROUP
+      userName: ""
+      password: ""
+    zk:
+      server-addr: 127.0.0.1:2181
+      session-timeout: 6000
+      connect-timeout: 2000
+      username: ""
+      password: ""
+  registry:
+    type: nacos
+    nacos:
+      application: seata-server
+      server-addr: localhost:8848
+      namespace:
+      userName: ""
+      password: ""
+    redis:
+      server-addr: localhost:6379
+      db: 0
+      password:
+      timeout: 0
+    sofa:
+      server-addr: 127.0.0.1:9603
+      region: DEFAULT_ZONE
+      datacenter: DefaultDataCenter
+      group: SEATA_GROUP
+      addressWaitTime: 3000
+      application: default
+    zk:
+      server-addr: 127.0.0.1:2181
+      session-timeout: 6000
+      connect-timeout: 2000
+      username: ""
+      password: ""
+```
+
+### （10）修改主启动类，添加数据源代理注解@EnableAutoDataSourceProxy
+
+3001和3002类似，**删除config目录下的DataSourceProxyConfig**
+
+```java
+package com.atguigu.springcloud.alibaba;
+import io.seata.spring.annotation.datasource.EnableAutoDataSourceProxy;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+/**
+ * @author 王柳
+ * @date 2020/4/23 13:37
+ */
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+@EnableAutoDataSourceProxy
+public class SeataAccountMainApp3003 {
+    public static void main(String[] args) {
+        SpringApplication.run(SeataAccountMainApp3003.class, args);
+    }
+}
+```
+
+### （11）启动3001、3002、3003，像之前一样测试
+
 # 二十一、TX-LCN分布式事务
 
 
