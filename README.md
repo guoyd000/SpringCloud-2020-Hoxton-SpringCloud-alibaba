@@ -9696,7 +9696,301 @@ public class SeataAccountMainApp3003 {
 
 # 二十一、TX-LCN分布式事务
 
+参考[SpringCloud实战学习](wiz://open_document?guid=a6a8e6ec-bf20-4a66-9d7b-4fbd37fb1d26&kbguid=&private_kbguid=9e15e816-792d-4528-9d21-a849cc4117d5)中的TX-LCN分布式事务。
 
+GitHub地址： [https://github.com/wangliu1102/SpringCloudStudy-Practical](https://github.com/wangliu1102/SpringCloudStudy-Practical.git)
+
+
+
+官网：http://www.txlcn.org/zh-cn/
+
+大体上和Seata差不多，配置不同。可以查看官网进行配置。
+
+**这里是自己配置服务端，也可以参考Seata下载对应包启动作为服务端。**
+
+## 1、服务端TM
+
+导入依赖
+
+```xml
+    <properties>
+        <codingapi.txlcn.version>5.0.2.RELEASE</codingapi.txlcn.version>
+    </properties>
+```
+
+ 
+
+```xml
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.codingapi.txlcn</groupId>
+            <artifactId>txlcn-tc</artifactId>
+            <version>${codingapi.txlcn.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.codingapi.txlcn</groupId>
+            <artifactId>txlcn-tm</artifactId>
+            <version>${codingapi.txlcn.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.codingapi.txlcn</groupId>
+            <artifactId>txlcn-txmsg-netty</artifactId>
+            <version>${codingapi.txlcn.version}</version>
+        </dependency>
+```
+
+开启注解
+
+```java
+@EnableTransactionManagerServer
+```
+
+  ![img](img/2b57b68c-68c2-47a5-9916-486e978e0ec9.png)
+
+  
+
+配置文件只能使用application.propreties格式的文件，不能使用application.yml  
+
+需要redis环境
+
+需要创建MySQL数据库, 名称为: tx-manager
+
+创建数据表：
+
+```sql
+CREATE TABLE `t_tx_exception`  (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `group_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `unit_id` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `mod_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NULL DEFAULT NULL,
+  `transaction_state` tinyint(4) NULL DEFAULT NULL,
+  `registrar` tinyint(4) NULL DEFAULT NULL,
+  `remark` varchar(4096) NULL DEFAULT  NULL,
+  `ex_state` tinyint(4) NULL DEFAULT NULL COMMENT '0 未解决 1已解决',
+  `create_time` datetime(0) NULL DEFAULT NULL,
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_general_ci ROW_FORMAT = Dynamic;
+```
+
+修改配置文件application.yml
+
+```yaml
+spring.application.name=TransactionManager
+server.port=7970
+# JDBC 数据库配置
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+spring.datasource.url=jdbc:mysql://127.0.0.1:3306/tx-manager?characterEncoding=UTF-8&serverTimezone=GMT%2B8
+spring.datasource.username=root
+spring.datasource.password=123456
+#开启驼峰功能
+mybatis-plus.configuration.map-underscore-to-camel-case=true
+#允许JDBC 生成主键
+mybatis-plus.configuration.use-generated-keys=true
+# 数据库方言
+spring.jpa.database-platform=org.hibernate.dialect.MySQL5InnoDBDialect
+# 第一次运行可以设置为: create, 为TM创建持久化数据库表
+spring.jpa.hibernate.ddl-auto=update
+# TM监听IP. 默认为 127.0.0.1
+tx-lcn.manager.host=127.0.0.1
+# TM监听Socket端口. 默认为 ${server.port} - 100
+tx-lcn.manager.port=8070
+# 心跳检测时间(ms). 默认为 300000
+tx-lcn.manager.heart-time=300000
+# 分布式事务执行总时间(ms). 默认为36000
+tx-lcn.manager.dtx-time=8000
+# 参数延迟删除时间单位ms  默认为dtx-time值
+tx-lcn.message.netty.attr-delay-time=${tx-lcn.manager.dtx-time}
+# 事务处理并发等级. 默认为机器逻辑核心数5倍
+tx-lcn.manager.concurrent-level=160
+# TM后台登陆密码，默认值为codingapi
+tx-lcn.manager.admin-key=codingapi
+# 分布式事务锁超时时间 默认为-1，当-1时会用tx-lcn.manager.dtx-time的时间
+tx-lcn.manager.dtx-lock-time=${tx-lcn.manager.dtx-time}
+# 雪花算法的sequence位长度，默认为12位.
+tx-lcn.manager.seq-len=12
+# 异常回调开关。开启时请制定ex-url
+tx-lcn.manager.ex-url-enabled=false
+# 事务异常通知（任何http协议地址。未指定协议时，为TM提供内置功能接口）。默认是邮件通知
+tx-lcn.manager.ex-url=/provider/email-to/wangliu.ah@qq.com
+# 开启日志,默认为false
+tx-lcn.logger.enabled=true
+#tx-lcn.logger.enabled=false
+tx-lcn.logger.driver-class-name=${spring.datasource.driver-class-name}
+tx-lcn.logger.jdbc-url=${spring.datasource.url}
+tx-lcn.logger.username=${spring.datasource.username}
+tx-lcn.logger.password=${spring.datasource.password}
+# redis 的设置信息. 线上请用Redis Cluster
+spring.redis.host=47.99.241.160
+spring.redis.port=6379
+spring.redis.password=ahhs2019
+spring.redis.database=13
+#若用tx-lcn.manager.ex-url=/provider/email-to/xxx@xx.xxx 这个配置，配置管理员邮箱信息(如QQ邮箱)，需要导入邮件服务依赖spring-boot-starter-mail
+spring.mail.host=smtp.qq.com
+spring.mail.port=587
+spring.mail.username=wangliu.ah@qq.com
+spring.mail.password=ydiekcpezegmjicc
+#作为Eureka客户端注册进服务中心
+eureka.client.serviceUrl.defaultZone=http://admin:123456@eureka7001.com:7001/eureka,http://admin:123456@eureka7002.com:7002/eureka
+eureka.instance.instance-id=TransactionManager7970
+eureka.instance.prefer-ip-address=true
+info.app.name=springcloud-server
+info.company.name=www.wangliu.com
+info.build.artifactId=${project.artifactId}
+info.build.version=${project.version}
+```
+
+TM后台访问地址：http://项目实际地址:端口号
+
+![img](img/91a2de05-6962-4ac8-898d-3b5140accdfb.png)
+
+## 2、客户端TC
+
+考虑到客户端需要互相调用，都需要分布式事务，故在父POM文件中导入相关依赖
+
+父POM文件导入依赖
+
+```xml
+    <properties>
+        <codingapi.txlcn.version>5.0.2.RELEASE</codingapi.txlcn.version>
+    </properties>
+```
+
+ 
+
+```xml
+        <dependency>
+            <groupId>com.codingapi.txlcn</groupId>
+            <artifactId>txlcn-tc</artifactId>
+            <version>${codingapi.txlcn.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.codingapi.txlcn</groupId>
+            <artifactId>txlcn-txmsg-netty</artifactId>
+            <version>${codingapi.txlcn.version}</version>
+        </dependency>
+```
+
+修改配置文件application.yml
+
+```yaml
+#设置日志等级为debug等级，这样方便追踪排查问题
+logging:
+  level:
+    com:
+      codingapi: debug
+tx-lcn:
+  client:
+    manager-address: 127.0.0.1:8070
+```
+
+**或者**
+
+```yaml
+#设置日志等级为debug等级，这样方便追踪排查问题
+logging:
+  level:
+    com:
+      codingapi: debug
+tm:
+  manager:
+    url: http://127.0.0.1:8070/tx/manager/
+```
+
+调用方和被调用方都要开启注解
+
+```java
+@EnableDistributedTransaction
+```
+
+![img](img/863f7aad-e2c1-43c0-9e77-fea74c91e9bf.png)
+
+**无论是调用方，还是被调用方，都需要设置开启分布式事务，如果有任何一方不开启，则分布式事务不生效**
+
+被调用方服务熔断（fegin），应手动给调用方抛出异常，以便回滚分布式事务。（只有调用方抛出异常才能回滚）
+
+![img](img/4518d0a5-13d4-4890-b9b5-5c2376225122.png)
+
+通过注解**@LcnTransaction**在方法上开启分布式事务，通过注解**@Transactional**开启本地事务，例如：
+
+调用方：
+
+```java
+/**
+ * Created by 王柳
+ * Date 2019/10/2 15:49
+ * version:1.0
+ */
+@Service
+@Slf4j
+public class StudentServcieImpl extends ServiceImpl<StudentMapper, Student> implements IStudentService {
+    @Autowired
+    private CourseFegin courseFegin;
+    @Resource
+    private StudentMapper studentMapper;
+    @LcnTransaction
+    @Transactional
+    @Override
+    public Map saveStudent(Map param) throws Exception {
+        Map map = new HashMap();
+        map.put("code", "-1");
+        Map course = (Map) param.get("course");
+        Map student = (Map) param.get("student");
+        Student student1 = new Student();
+        student1.setUserName((String) student.get("name"));
+        student1.setAge(Integer.valueOf((String) student.get("age")));
+        studentMapper.insert(student1);
+        log.info("学生服务----->>saveStudent");
+        Map courseMap = courseFegin.saveCourse(course);
+        log.info("课程服务----->>saveCourse------>> courseMap: " + courseMap);
+        if (courseMap == null){
+            throw new Exception("课程服务发生熔断，调用课程服务失败，开始回退课程服务--->>选课");
+        }
+        Boolean exceFlag = (Boolean) student.get("exceFlag");
+        if (exceFlag) {
+            throw new RuntimeException();
+        }
+        map.put("code", "1");
+        return map;
+    }
+}
+```
+
+被调用方：
+
+```java
+/**
+ * Created by 王柳
+ * Date 2019/10/2 15:38
+ * version:1.0
+ */
+@Service
+@Slf4j
+public class CourseServiceImpl extends ServiceImpl<CourseMapper, Course> implements ICourseService {
+    @Resource
+    private CourseMapper courseMapper;
+    @LcnTransaction
+    @Transactional
+    @Override
+    public Map saveCourse(Map param) {
+        Map map = new HashMap();
+        map.put("code", "-1");
+        Boolean exceFlag = (Boolean) param.get("exceFlag");
+        if (exceFlag) {
+            throw new RuntimeException();
+        } else {
+            Course course = new Course();
+            course.setName((String) param.get("name"));
+            courseMapper.insert(course);
+            map.put("code", "1");
+        }
+        return map;
+    }
+}
+```
 
 # 二十二、SpringBoot Admin监控中心
 
